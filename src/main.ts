@@ -25,7 +25,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 app.appendChild(renderer.domElement);
 
-// 구슬 이름표(캡틴 요청): CSS2D 라벨. 카메라에서 멀면 숨기고, 주인공(focus)은 강조
+// 구슬 이름표(캡틴 요청): CSS2D 라벨. 카메라에서 멀면 숨긴다(카메라가 따라가는 구슬은 예외)
 const labelRenderer = new CSS2DRenderer();
 labelRenderer.setSize(innerWidth, innerHeight);
 Object.assign(labelRenderer.domElement.style, { position: 'fixed', inset: '0', pointerEvents: 'none' });
@@ -34,14 +34,15 @@ app.appendChild(labelRenderer.domElement);
 {
   const st = document.createElement('style');
   // 접근성(캡틴 지적 3): 글자는 항상 흰 배경 위 진한 색(대비 9.5:1). 구슬 색은 테두리(장식)로만 쓴다.
-  // 주인공·완주는 색이나 투명도가 아니라 텍스트로도 구분한다(1.4.1).
-  st.textContent = `.orb-label{font:800 13px/1.1 system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;color:#2a2230;background:#fff;border:2px solid var(--c);border-radius:999px;padding:3px 8px;white-space:nowrap;transform:translateY(-14px)}
+  // 완주는 색이나 투명도가 아니라 텍스트로도 구분한다(1.4.1). 선두 '주인공' 강조는 캡틴 요청으로 없앴다(라벨 크기 통일).
+  // 위치: 구슬 꼭대기 위 LABEL_LIFT 지점에 라벨 중심, margin-top으로 살짝 더 띄운다.
+  st.textContent = `.orb-label{font:800 13px/1.1 system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;color:#2a2230;background:#fff;border:2px solid var(--c);border-radius:999px;padding:3px 8px;white-space:nowrap;margin-top:-12px}
 .orb-label .tag{font-size:11px;margin-left:5px;color:#5b4a68}
-.orb-label.focus{font-size:15px;border-width:4px;padding:4px 10px;box-shadow:0 0 0 2px #2a2230}
 .orb-label.done{border-style:dashed}`;
   document.head.appendChild(st);
 }
 const LABEL_FAR = 45;
+const LABEL_LIFT = MARBLE_RADIUS + 0.55; // 구슬 꼭대기 위로 띄우는 높이(월드 단위)
 const labels = new Map<number, CSS2DObject>();
 
 const scene = new THREE.Scene();
@@ -362,11 +363,12 @@ renderer.setAnimationLoop((now) => {
     const lb = labels.get(m.id);
     if (!lb) continue;
     lb.position.copy(m.mesh.position);
+    lb.position.y += LABEL_LIFT;
     const isFocus = snap.focus?.id === m.id;
+    // 카메라가 따라가는 구슬은 멀어도 이름을 보이게만 한다(모양은 다른 라벨과 같음)
     lb.visible = isFocus || m.mesh.position.distanceTo(camera.position) < LABEL_FAR;
-    lb.element.classList.toggle('focus', isFocus);
     lb.element.classList.toggle('done', m.place !== null);
-    const tagText = m.place !== null ? `${m.place}위 완주` : isFocus ? '주인공' : '';
+    const tagText = m.place !== null ? `${m.place}위 완주` : '';
     const tagEl = lb.element.lastElementChild as HTMLElement;
     if (tagEl.textContent !== tagText) tagEl.textContent = tagText;
   }

@@ -1,6 +1,6 @@
 // 워커 B: 파티 게임풍 한국어 UI (파스텔·둥근 모서리·두꺼운 글자).
 // 이름은 전부 textContent로 넣어 HTML 주입을 방지한다. CSS는 <style>로 주입.
-import type { CreateUI, JoinInfo, Marble, PartyStatus, RaceSnapshot, WinMode } from './types';
+import type { CreateUI, EntryMode, JoinInfo, Marble, PartyStatus, RaceSnapshot, WinMode } from './types';
 
 const LS_KEY = 'orb-derby:names';
 const DEFAULT_NAMES = ['철수', '영희', '민수', '지영', '태호', '수진'];
@@ -33,6 +33,16 @@ const CSS = `
 .odb-err{font-size:13px;font-weight:800;color:#d32f2f;margin:4px 0 0;min-height:20px}
 .odb-start{margin-top:10px;width:100%;padding:13px 0;border:none;border-radius:999px;background:#e0508a;color:#fff;font-size:19px;font-weight:900;letter-spacing:1px;cursor:pointer;box-shadow:0 6px 0 #a8245e}
 .odb-start:active{transform:translateY(3px);box-shadow:0 3px 0 #a8245e}
+.odb-start:disabled{opacity:.55;cursor:not-allowed;box-shadow:none}
+.odb-tabs{display:flex;gap:8px;margin:14px 0 4px}
+.odb-tab{flex:1;padding:10px 0;border:3px solid transparent;border-radius:999px;background:#f3efff;color:#6b5c78;font-size:15px;font-weight:900;cursor:pointer}
+.odb-tab.on{background:#ffe3ef;color:#a8245e;border-color:#ff9ec4}
+.odb-chip{display:inline-flex;align-items:center;gap:6px;background:#fff;border:2px solid #e5ddff;border-radius:999px;padding:4px 6px 4px 12px;font-size:13px;font-weight:800;color:#4a3f55;margin:0 6px 6px 0}
+.odb-chipx{border:none;background:#f3efff;color:#6b5c78;border-radius:50%;width:22px;height:22px;font-size:13px;font-weight:900;cursor:pointer;line-height:1}
+.odb-chips{margin-top:8px}
+.odb-qrclear{margin-top:4px;padding:7px 14px;border:2px solid #e5ddff;border-radius:999px;background:#fff;color:#6b5c78;font-size:12px;font-weight:900;cursor:pointer}
+.odb-qrhint{font-size:13px;font-weight:800;color:#a8245e;margin:8px 0 0}
+.odb-qrcount{font-size:12px;font-weight:800;color:#6b5c78;margin:10px 0 0}
 .odb-count{top:38%;left:50%;transform:translate(-50%,-50%);font-size:min(120px,22vw);font-weight:900;color:#fff;text-shadow:0 6px 0 #e0508a,0 12px 32px rgba(224,80,138,.5);-webkit-text-stroke:3px #a8245e;paint-order:stroke fill}
 .odb-hud{top:12px;left:12px;background:rgba(255,247,251,.94);border:3px solid #ffd1e3;border-radius:20px;padding:12px 14px;width:248px;box-shadow:0 6px 24px rgba(255,143,178,.3)}
 .odb-hudhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
@@ -47,10 +57,20 @@ const CSS = `
 .odb-tag-done{background:#d9f7e5;color:#13703c}
 .odb-tag-focus{background:#ffe3ef;color:#a8245e}
 .odb-row.odb-focus{border-color:#ff9ec4;background:#fff0f6}
+.odb-row.odb-following{border-color:#c23375;background:#fff}
+.odb-rowbtn{display:flex;align-items:center;gap:7px;width:100%;border:none;background:transparent;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.odb-followchip{display:block;width:100%;margin-bottom:8px;padding:7px 10px;border:2px solid #c23375;border-radius:999px;background:#fff0f6;color:#a8245e;font-size:13px;font-weight:900;cursor:pointer}
+.odb-all{margin-top:10px;border-top:2px dashed #ffe0ec;padding-top:8px}
+.odb-allsummary{font-size:13px;font-weight:900;color:#5a4f66;cursor:pointer}
+.odb-allsearch{width:100%;margin-top:8px;border:2px solid #e5ddff;border-radius:12px;padding:7px 10px;font-size:13px;font-weight:700;color:#4a3f55;background:#fff;outline:none}
+.odb-allsearch::placeholder{color:#6b5c78;opacity:1}
+.odb-alllist{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:24vh;overflow:auto}
+.odb-panel summary:focus-visible{outline:3px solid #6a4fd8;outline-offset:2px}
 .odb-cambtn{margin-top:10px;width:100%;padding:9px 0;border:none;border-radius:999px;background:#6a4fd8;color:#fff;font-size:14px;font-weight:900;cursor:pointer;box-shadow:0 4px 0 #5740b8}
 .odb-cambtn:active{transform:translateY(2px);box-shadow:0 2px 0 #5740b8}
 .odb-speeds{display:flex;gap:6px;margin-top:10px}
-.odb-speed{flex:1;padding:7px 0;border:2px solid #e5ddff;border-radius:999px;background:#f3efff;color:#6b5c78;font-size:12px;font-weight:900;cursor:pointer}
+.odb-speed{flex:1;padding:7px 0;border:2px solid #e5ddff;border-radius:999px;background:#f3efff;color:#6b5c78;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap;min-width:0}
+.odb-speed-pause{flex:1.6 1 0}
 .odb-speed.on{background:#6a4fd8;border-color:#6a4fd8;color:#fff}
 .odb-winbanner{font-size:14px;font-weight:900;color:#fff;background:#c23375;border-radius:12px;padding:6px 10px;margin-bottom:8px;text-align:center;word-break:break-word}
 .odb-rectime{flex:0 0 auto;font-size:12px;font-weight:800;color:#6b5c78;font-variant-numeric:tabular-nums}
@@ -58,11 +78,12 @@ const CSS = `
 .odb-panel button:focus-visible{outline:3px solid #6a4fd8;outline-offset:2px}
 .odb-result{top:50%;left:50%;transform:translate(-50%,-50%);background:#fff7fb;border:4px solid #ffd1e3;border-radius:28px;padding:28px 30px;width:min(440px,calc(100vw - 32px));max-height:calc(100vh - 48px);overflow:auto;box-shadow:0 12px 40px rgba(255,143,178,.35);text-align:center}
 .odb-rlabel{font-size:15px;font-weight:900;color:#fff;background:#c23375;border-radius:999px;padding:5px 16px;display:inline-block;margin-bottom:10px}
-.odb-winner{font-size:44px;font-weight:900;letter-spacing:-1px;margin:0 0 4px;word-break:break-word;text-shadow:0 3px 0 rgba(255,255,255,.9)}
+.odb-winner{font-size:44px;font-weight:900;letter-spacing:-1px;margin:0 0 4px;word-break:break-word;color:#2a2230;text-decoration:underline;text-decoration-thickness:5px;text-underline-offset:6px}
+.odb-winswatch{width:46px;height:46px;border-radius:50%;margin:0 auto 10px;box-shadow:inset -5px -5px 0 rgba(0,0,0,.18)}
 .odb-rsub{font-size:14px;font-weight:800;color:#6b5c78;margin:0 0 14px}
 .odb-rlist{list-style:none;margin:0 0 16px;padding:0;display:flex;flex-direction:column;gap:4px;text-align:left;max-height:38vh;overflow:auto}
-.odb-restart{width:100%;padding:13px 0;border:none;border-radius:999px;background:#2e9e62;color:#fff;font-size:18px;font-weight:900;cursor:pointer;box-shadow:0 6px 0 #1e6e44}
-.odb-restart:active{transform:translateY(3px);box-shadow:0 3px 0 #1e6e44}
+.odb-restart{width:100%;padding:13px 0;border:none;border-radius:999px;background:#1f7a4a;color:#fff;font-size:18px;font-weight:900;cursor:pointer;box-shadow:0 6px 0 #145c36}
+.odb-restart:active{transform:translateY(3px);box-shadow:0 3px 0 #145c36}
 .odb-qr{background:#fff;border:3px solid #c9b8ff;border-radius:20px;padding:12px;width:200px;text-align:center}
 .odb-qrstatus{font-size:13px;font-weight:800;color:#6b5c78}
 .odb-qrimg{width:100%;height:auto;background:#fff;border-radius:8px;display:block}
@@ -76,6 +97,7 @@ const CSS = `
 @media (max-width:640px){
 .odb-hud{width:200px;padding:9px 10px;top:8px;left:8px}
 .odb-row{font-size:12px;padding:3px 7px}
+.odb-speed{font-size:10px}
 .odb-time{font-size:14px}
 .odb-speed{font-size:11px}
 .odb-lobby,.odb-result{padding:20px 18px}
@@ -137,6 +159,45 @@ function saveFirstWin(on: boolean): void {
   }
 }
 
+const LS_QR_KEY = 'orb-derby:qr-names';
+const LS_ENTRY_KEY = 'orb-derby:entry';
+
+function loadQrNames(): string[] {
+  try {
+    const raw = localStorage.getItem(LS_QR_KEY);
+    if (!raw) return [];
+    const arr: unknown = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((v): v is string => typeof v === 'string').map((s) => s.trim()).filter(Boolean).slice(0, MAX_NAMES);
+  } catch {
+    return [];
+  }
+}
+
+function saveQrNames(names: string[]): void {
+  try {
+    localStorage.setItem(LS_QR_KEY, JSON.stringify(names));
+  } catch {
+    // 저장 실패해도 레이스는 동작한다
+  }
+}
+
+function loadEntry(): EntryMode {
+  try {
+    return localStorage.getItem(LS_ENTRY_KEY) === 'qr' ? 'qr' : 'manual';
+  } catch {
+    return 'manual';
+  }
+}
+
+function saveEntry(m: EntryMode): void {
+  try {
+    localStorage.setItem(LS_ENTRY_KEY, m);
+  } catch {
+    // 저장 실패해도 레이스는 동작한다
+  }
+}
+
 export const createUI: CreateUI = (root) => {
   if (!document.getElementById('odb-style')) {
     const style = document.createElement('style');
@@ -147,6 +208,8 @@ export const createUI: CreateUI = (root) => {
 
   let toggleCb: () => void = () => {};
   let speedCb: (x: number) => void = () => {};
+  let followCb: (id: number | null) => void = () => {};
+  let shownFollowing: number | null = null;
   const SPEEDS = [0.5, 1, 2, 4];
   // 화면에 보이는 현재 배속(키보드 P/Space 일시정지·재개용). renderHud에서 갱신.
   let shownSpeed = 1;
@@ -260,6 +323,17 @@ export const createUI: CreateUI = (root) => {
 
   let startCb: (names: string[], mode: WinMode) => void = () => {};
   startBtn.onclick = () => {
+    const firstWin = fwCheck.checked;
+    saveFirstWin(firstWin);
+    const mode: WinMode = firstWin ? 'first' : 'last';
+    if (entryMode === 'qr') {
+      // 버튼 비활성화로 이미 막혀 있으나 이중으로 확인
+      if (qrNames.length < 2) return;
+      const use = qrNames.slice(0, MAX_NAMES);
+      saveQrNames(use);
+      startCb(use, mode);
+      return;
+    }
     const names = parseNames(area.value);
     if (names.length < 2) {
       err.textContent = '참가자를 2명 이상 입력해 주세요.';
@@ -267,9 +341,7 @@ export const createUI: CreateUI = (root) => {
     }
     const use = names.slice(0, MAX_NAMES);
     saveNames(use);
-    const firstWin = fwCheck.checked;
-    saveFirstWin(firstWin);
-    startCb(use, firstWin ? 'first' : 'last');
+    startCb(use, mode);
   };
 
   // ── QR 참가 패널 (넓은 화면: 로비 카드 오른쪽, 좁은 화면: 카드 안 아래) ──
@@ -308,6 +380,163 @@ export const createUI: CreateUI = (root) => {
     '이 주소(localhost)는 휴대폰에서 열 수 없어요. 터미널의 Network 주소나 배포 주소로 여세요';
   qrWarn.style.display = 'none';
 
+  // ── 참가 방식 탭 [직접 입력 | QR 참가] ──
+  let entryMode: EntryMode = loadEntry();
+  let qrNames: string[] = loadQrNames();
+  let entryCb: (m: EntryMode) => void = () => {};
+
+  const tabsEl = document.createElement('div');
+  tabsEl.className = 'odb-tabs';
+  tabsEl.setAttribute('role', 'tablist');
+  tabsEl.setAttribute('aria-label', '참가 방식');
+  const tabManual = document.createElement('button');
+  tabManual.className = 'odb-tab';
+  tabManual.setAttribute('role', 'tab');
+  tabManual.setAttribute('aria-controls', 'odb-panel-manual');
+  tabManual.textContent = '직접 입력';
+  const tabQr = document.createElement('button');
+  tabQr.className = 'odb-tab';
+  tabQr.setAttribute('role', 'tab');
+  tabQr.setAttribute('aria-controls', 'odb-panel-qr');
+  tabQr.textContent = 'QR 참가';
+  tabsEl.appendChild(tabManual);
+  tabsEl.appendChild(tabQr);
+  lobbyEl.insertBefore(tabsEl, nameLabel);
+
+  const manualPanel = document.createElement('div');
+  manualPanel.id = 'odb-panel-manual';
+  manualPanel.setAttribute('role', 'tabpanel');
+  manualPanel.setAttribute('aria-label', '직접 입력');
+  lobbyEl.insertBefore(manualPanel, nameLabel);
+  manualPanel.appendChild(nameLabel);
+  manualPanel.appendChild(area);
+  manualPanel.appendChild(countLine);
+  manualPanel.appendChild(err);
+
+  const qrPanel = document.createElement('div');
+  qrPanel.id = 'odb-panel-qr';
+  qrPanel.setAttribute('role', 'tabpanel');
+  qrPanel.setAttribute('aria-label', 'QR 참가');
+  lobbyEl.insertBefore(qrPanel, modes);
+  qrPanel.appendChild(qrEl);
+  const qrRosterLabel = el('div', 'odb-label', qrPanel);
+  qrRosterLabel.textContent = 'QR로 들어온 참가자';
+  const qrCount = el('p', 'odb-qrcount', qrPanel);
+  const qrChips = el('div', 'odb-chips', qrPanel);
+  const qrClear = document.createElement('button');
+  qrClear.className = 'odb-qrclear';
+  qrClear.textContent = '전체 비우기';
+  qrPanel.appendChild(qrClear);
+  const qrHint = el('p', 'odb-qrhint', qrPanel);
+  qrHint.textContent = 'QR 참가자를 2명 이상 모아 주세요';
+
+  function refreshStartState(): void {
+    if (entryMode === 'qr') {
+      const ok = qrNames.length >= 2;
+      startBtn.disabled = !ok;
+      qrHint.style.display = ok ? 'none' : '';
+    } else {
+      startBtn.disabled = false;
+    }
+  }
+
+  function renderQrRoster(): void {
+    qrChips.replaceChildren();
+    qrNames.forEach((n, idx) => {
+      const chip = document.createElement('span');
+      chip.className = 'odb-chip';
+      const t = document.createElement('span');
+      t.textContent = n;
+      const x = document.createElement('button');
+      x.className = 'odb-chipx';
+      x.textContent = '×';
+      x.setAttribute('aria-label', `${n} 빼기`);
+      x.onclick = () => {
+        qrNames.splice(idx, 1);
+        saveQrNames(qrNames);
+        renderQrRoster();
+      };
+      chip.appendChild(t);
+      chip.appendChild(x);
+      qrChips.appendChild(chip);
+    });
+    qrCount.textContent = `현재 ${qrNames.length}명`;
+    refreshStartState();
+  }
+
+  qrClear.onclick = () => {
+    qrNames = [];
+    saveQrNames(qrNames);
+    renderQrRoster();
+  };
+
+  // QR 패널은 QR 탭에서만 보인다. setJoinInfo가 저장한 마지막 상태를 탭 기준으로 다시 그린다.
+  let lastJoin: { info: JoinInfo | null; status: PartyStatus; msg?: string } | null = null;
+  function renderJoin(): void {
+    const j = lastJoin;
+    const show = !!j && (j.status === 'connecting' || j.status === 'error' || !!j.info);
+    if (!show || entryMode !== 'qr') {
+      qrEl.style.display = 'none';
+      return;
+    }
+    qrEl.style.display = '';
+    if (j.status === 'connecting') {
+      qrStatus.style.display = '';
+      qrStatus.textContent = '연결 중…';
+      qrBody.style.display = 'none';
+      qrWarn.style.display = 'none';
+    } else if (j.status === 'error') {
+      qrStatus.style.display = '';
+      qrStatus.textContent = j.msg || '연결에 실패했어요';
+      qrBody.style.display = 'none';
+      qrWarn.style.display = 'none';
+    } else if (j.info) {
+      qrStatus.style.display = 'none';
+      qrBody.style.display = '';
+      qrImg.src = j.info.qrDataUrl;
+      qrCode.textContent = `방 코드 ${j.info.roomId.slice(-6)}`;
+      qrUrl.textContent = j.info.url;
+      qrWarn.style.display = j.info.unreachable ? '' : 'none';
+    } else {
+      qrBody.style.display = 'none';
+      qrWarn.style.display = 'none';
+    }
+  }
+
+  function paintTab(): void {
+    const isManual = entryMode === 'manual';
+    tabManual.classList.toggle('on', isManual);
+    tabQr.classList.toggle('on', !isManual);
+    tabManual.setAttribute('aria-selected', isManual ? 'true' : 'false');
+    tabQr.setAttribute('aria-selected', !isManual ? 'true' : 'false');
+    tabManual.tabIndex = isManual ? 0 : -1;
+    tabQr.tabIndex = !isManual ? 0 : -1;
+    manualPanel.style.display = isManual ? '' : 'none';
+    qrPanel.style.display = !isManual ? '' : 'none';
+  }
+
+  function selectTab(m: EntryMode, focusTab = false): void {
+    if (m === entryMode) {
+      if (focusTab) (m === 'manual' ? tabManual : tabQr).focus();
+      return;
+    }
+    entryMode = m;
+    saveEntry(m);
+    paintTab();
+    renderJoin();
+    refreshStartState();
+    entryCb(m);
+    if (focusTab) (m === 'manual' ? tabManual : tabQr).focus();
+  }
+
+  tabManual.onclick = () => selectTab('manual');
+  tabQr.onclick = () => selectTab('qr');
+  tabsEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    e.preventDefault();
+    selectTab(entryMode === 'manual' ? 'qr' : 'manual', true);
+  });
+
   // ── 카운트다운 ──
   let countTimer = 0;
   function hideAll(): void {
@@ -330,6 +559,9 @@ export const createUI: CreateUI = (root) => {
   for (let i = 0; i < HUD_N; i++) {
     const li = document.createElement('li');
     li.className = 'odb-row';
+    const btn = document.createElement('button');
+    btn.className = 'odb-rowbtn';
+    btn.setAttribute('aria-pressed', 'false');
     const rank = document.createElement('span');
     rank.className = 'odb-rank';
     const dot = document.createElement('span');
@@ -337,9 +569,10 @@ export const createUI: CreateUI = (root) => {
     dot.setAttribute('aria-hidden', 'true');
     const nm = document.createElement('span');
     nm.className = 'odb-name';
-    li.appendChild(rank);
-    li.appendChild(dot);
-    li.appendChild(nm);
+    btn.appendChild(rank);
+    btn.appendChild(dot);
+    btn.appendChild(nm);
+    li.appendChild(btn);
     board.appendChild(li);
     rowEls.push(li);
   }
@@ -351,7 +584,7 @@ export const createUI: CreateUI = (root) => {
   speedsBox.className = 'odb-speeds';
   const speedBtns: HTMLButtonElement[] = SPEED_BTNS.map((s) => {
     const b = document.createElement('button');
-    b.className = 'odb-speed';
+    b.className = s.x === 0 ? 'odb-speed odb-speed-pause' : 'odb-speed';
     b.textContent = s.label;
     b.setAttribute('aria-label', s.aria);
     b.setAttribute('aria-pressed', 'false');
@@ -382,8 +615,96 @@ export const createUI: CreateUI = (root) => {
   hudEl.appendChild(camBtn);
   hudEl.appendChild(speedsBox);
 
+  // 시점 고정 칩(따라가는 구슬이 있을 때만) — 누르면 자동 연출로
+  const followChip = document.createElement('button');
+  followChip.className = 'odb-followchip';
+  followChip.style.display = 'none';
+  followChip.onclick = () => followCb(null);
+  hudEl.insertBefore(followChip, board);
+
+  // 전체 참가자 접이식 목록(검색 포함, 40명 대응)
+  const allDetails = document.createElement('details');
+  allDetails.className = 'odb-all';
+  const allSummary = document.createElement('summary');
+  allSummary.className = 'odb-allsummary';
+  allSummary.textContent = '전체 참가자';
+  const allSearch = document.createElement('input');
+  allSearch.type = 'search';
+  allSearch.className = 'odb-allsearch';
+  allSearch.placeholder = '이름 검색';
+  allSearch.setAttribute('aria-label', '참가자 검색');
+  const allList = document.createElement('ol');
+  allList.className = 'odb-alllist';
+  allDetails.appendChild(allSummary);
+  allDetails.appendChild(allSearch);
+  allDetails.appendChild(allList);
+  hudEl.appendChild(allDetails);
+  let lastSnap: RaceSnapshot | null = null;
+  allSearch.addEventListener('input', () => {
+    if (lastSnap) renderAllList(lastSnap, shownFollowing);
+  });
+
   let lastHudAt = 0;
-  function renderHud(snap: RaceSnapshot, manual: boolean, speed: number): void {
+  function renderRowTags(btn: HTMLElement, m: Marble, snap: RaceSnapshot): void {
+    btn.querySelectorAll('.odb-tag').forEach((t) => t.remove());
+    const isWinner = snap.winner !== null && m.id === snap.winner.id;
+    if (isWinner) {
+      const tag = document.createElement('span');
+      tag.className = 'odb-tag odb-tag-focus';
+      tag.textContent = '당첨';
+      btn.appendChild(tag);
+    } else if (m.place !== null) {
+      const tag = document.createElement('span');
+      tag.className = 'odb-tag odb-tag-done';
+      tag.textContent = '완주';
+      btn.appendChild(tag);
+    }
+    // 당첨 확정 구슬에는 유력 태그를 붙이지 않는다
+    // (first 모드는 확정 후 focus가 당첨자로 머물러 유력 태그가 사라진다)
+    if (!isWinner && snap.focus !== null && m.id === snap.focus.id) {
+      const tag = document.createElement('span');
+      tag.className = 'odb-tag odb-tag-focus';
+      tag.textContent = snap.mode === 'first' ? '우승 유력' : '꼴등 유력';
+      btn.appendChild(tag);
+    }
+  }
+
+  function renderAllList(snap: RaceSnapshot, following: number | null): void {
+    // 목록 안에서 탭 이동 중이면 다시 그리지 않는다(포커스 유지)
+    if (allList.contains(document.activeElement)) return;
+    const q = allSearch.value.trim().toLowerCase();
+    allList.replaceChildren();
+    snap.ranked.forEach((m, i) => {
+      if (q && !m.name.toLowerCase().includes(q)) return;
+      const li = document.createElement('li');
+      li.className = 'odb-row';
+      li.classList.toggle('odb-following', m.id === following);
+      const btn = document.createElement('button');
+      btn.className = 'odb-rowbtn';
+      btn.setAttribute('aria-pressed', m.id === following ? 'true' : 'false');
+      btn.setAttribute('aria-label', `${m.place ?? i + 1}위 ${m.name}${m.place !== null ? ' 완주' : ''} 시점 선택`);
+      const rank = document.createElement('span');
+      rank.className = 'odb-rank';
+      rank.textContent = `${m.place ?? i + 1}위`;
+      const dot = document.createElement('span');
+      dot.className = 'odb-dot';
+      dot.style.background = m.color;
+      dot.setAttribute('aria-hidden', 'true');
+      const nm = document.createElement('span');
+      nm.className = 'odb-name';
+      nm.textContent = m.name;
+      btn.appendChild(rank);
+      btn.appendChild(dot);
+      btn.appendChild(nm);
+      renderRowTags(btn, m, snap);
+      btn.onclick = () => followCb(m.id === following ? null : m.id);
+      li.appendChild(btn);
+      allList.appendChild(li);
+    });
+    allSummary.textContent = `전체 참가자 ${snap.ranked.length}명`;
+  }
+
+  function renderHud(snap: RaceSnapshot, manual: boolean, speed: number, following: number | null): void {
     timeEl.textContent = `경과 ${snap.t.toFixed(1)}초`;
     modeEl.textContent = snap.mode === 'first' ? '선착순 우승' : '꼴등 당첨';
     camBtn.textContent = manual ? '자동 카메라로 보기' : '수동 카메라로 보기';
@@ -416,6 +737,16 @@ export const createUI: CreateUI = (root) => {
       }
     }
     const focusId = snap.focus ? snap.focus.id : -1;
+    shownFollowing = following;
+    // 시점 고정 칩
+    const followed = following != null ? (snap.ranked.find((m) => m.id === following) ?? null) : null;
+    if (followed) {
+      followChip.style.display = '';
+      followChip.textContent = `${followed.name} 시점 · 자동으로`;
+      followChip.setAttribute('aria-label', `${followed.name} 시점 고정 해제, 자동 연출로`);
+    } else {
+      followChip.style.display = 'none';
+    }
     for (let i = 0; i < HUD_N; i++) {
       const li = rowEls[i];
       const m: Marble | undefined = snap.ranked[i];
@@ -425,31 +756,30 @@ export const createUI: CreateUI = (root) => {
       }
       li.style.display = '';
       li.classList.toggle('odb-focus', m.id === focusId);
-      const rank = li.children[0] as HTMLElement;
+      li.classList.toggle('odb-following', m.id === following);
+      const btn = li.children[0] as HTMLButtonElement;
+      btn.setAttribute('aria-pressed', m.id === following ? 'true' : 'false');
+      btn.setAttribute(
+        'aria-label',
+        `${m.place ?? i + 1}위 ${m.name}${m.place !== null ? ' 완주' : ''} 시점 선택`,
+      );
+      btn.onclick = () => followCb(m.id === following ? null : m.id);
+      const rank = btn.children[0] as HTMLElement;
       rank.textContent = `${m.place ?? i + 1}위`;
-      const dot = li.children[1] as HTMLElement;
+      const dot = btn.children[1] as HTMLElement;
       dot.style.background = m.color;
-      const nm = li.children[2] as HTMLElement;
+      const nm = btn.children[2] as HTMLElement;
       nm.textContent = m.name;
       // 기존 태그 제거 후 상태에 맞게 부착
-      li.querySelectorAll('.odb-tag').forEach((t) => t.remove());
-      if (m.place !== null) {
-        const tag = document.createElement('span');
-        tag.className = 'odb-tag odb-tag-done';
-        tag.textContent = '완주';
-        li.appendChild(tag);
-      }
-      if (m.id === focusId) {
-        const tag = document.createElement('span');
-        tag.className = 'odb-tag odb-tag-focus';
-        tag.textContent = '주인공';
-        li.appendChild(tag);
-      }
+      renderRowTags(btn, m, snap);
     }
+    renderAllList(snap, following);
   }
 
   // ── 결과 ──
   const rLabel = el('div', 'odb-rlabel', resultEl);
+  const winSwatch = el('div', 'odb-winswatch', resultEl);
+  winSwatch.setAttribute('aria-hidden', 'true');
   const winnerEl = el('p', 'odb-winner', resultEl);
   const rSub = el('p', 'odb-rsub', resultEl);
   const rList = document.createElement('ol');
@@ -476,10 +806,21 @@ export const createUI: CreateUI = (root) => {
       }
       fwCheck.checked = loadFirstWin();
       refreshFwSub();
+      resetAnnounce();
+      // 저장된 탭으로 복원하고 코어에 1회 알린다(QR 탭이면 방을 연다)
+      entryMode = loadEntry();
+      paintTab();
+      renderQrRoster();
       hideAll();
       lobbyEl.style.display = '';
+      entryCb(entryMode);
     },
     showCountdown(n: number) {
+      if (n === 3) {
+        // 새 레이스 시작: 안내 상태 초기화
+        resetAnnounce();
+        announce('경주 시작!');
+      }
       hideAll();
       countEl.style.display = '';
       countEl.textContent = n > 0 ? String(n) : 'GO';
@@ -491,7 +832,7 @@ export const createUI: CreateUI = (root) => {
         }, 750);
       }
     },
-    updateHud(snap: RaceSnapshot, manual: boolean, speed: number = 1) {
+    updateHud(snap: RaceSnapshot, manual: boolean, speed: number = 1, following: number | null = null) {
       if (lobbyEl.style.display !== 'none' || resultEl.style.display !== 'none') {
         hideAll();
         hudEl.style.display = '';
@@ -502,15 +843,19 @@ export const createUI: CreateUI = (root) => {
       if (now - lastHudAt < HUD_THROTTLE_MS) return;
       lastHudAt = now;
       hudEl.style.display = '';
-      renderHud(snap, manual, speed);
+      lastSnap = snap;
+      renderHud(snap, manual, speed, following);
     },
     showResult(winner: Marble, ranked: Marble[], mode: WinMode, onRestart: () => void) {
       restartCb = onRestart;
       hideAll();
       resultEl.style.display = '';
+      announce(`결과 발표. ${winner.name} ${mode === 'first' ? '당첨' : '꼴등 당첨'}`);
       rLabel.textContent = mode === 'first' ? '선착순 우승' : '꼴등 당첨';
       winnerEl.textContent = winner.name;
-      winnerEl.style.color = winner.color;
+      // 글자는 진한색 고정, 구슬 색은 스와치+밑줄 장식으로만(대비 확보)
+      winSwatch.style.background = winner.color;
+      winnerEl.style.textDecorationColor = winner.color;
       rSub.textContent =
         mode === 'first' ? '가장 먼저 들어온 구슬이 당첨!' : '가장 늦게 들어온 구슬이 당첨!';
       rList.replaceChildren();
@@ -523,12 +868,19 @@ export const createUI: CreateUI = (root) => {
         const dot = document.createElement('span');
         dot.className = 'odb-dot';
         dot.style.background = m.color;
+        dot.setAttribute('aria-hidden', 'true');
         const nm = document.createElement('span');
         nm.className = 'odb-name';
         nm.textContent = m.name;
         li.appendChild(rank);
         li.appendChild(dot);
         li.appendChild(nm);
+        const rec = document.createElement('span');
+        rec.className = 'odb-rectime';
+        if (m.finishedAt !== null) rec.textContent = `${m.finishedAt.toFixed(1)}초`;
+        else if (m.id === winner.id && mode === 'last') rec.textContent = '꼴등 확정';
+        else rec.textContent = '—';
+        li.appendChild(rec);
         if (m.id === winner.id) {
           const tag = document.createElement('span');
           tag.className = 'odb-tag odb-tag-focus';
@@ -546,56 +898,37 @@ export const createUI: CreateUI = (root) => {
     onToggleManual(cb) {
       toggleCb = cb;
     },
+    onFollow(cb) {
+      followCb = cb;
+    },
     onSpeed(cb) {
       speedCb = cb;
     },
     addParticipant(name: string) {
+      // QR 참가는 항상 QR 명단에 쌓인다(레이스 중 포함, 다음 판 명단)
       const clean = name.trim();
       if (!clean) return { ok: false, reason: '이름을 입력해 주세요' };
       const norm = (s: string) => s.trim().toLowerCase();
-      const names = parseNames(area.value);
-      if (names.some((n) => norm(n) === norm(clean))) {
+      if (qrNames.some((n) => norm(n) === norm(clean))) {
         return { ok: false, reason: '이미 있는 이름이에요' };
       }
-      if (names.length >= MAX_NAMES) {
+      if (qrNames.length >= MAX_NAMES) {
         return { ok: false, reason: '정원이 찼어요' };
       }
-      names.push(clean);
-      area.value = names.join('\n');
-      area.scrollTop = area.scrollHeight;
-      err.textContent = '';
-      refreshCount();
-      saveNames(names);
+      qrNames.push(clean);
+      saveQrNames(qrNames);
+      renderQrRoster();
       showToast(`${clean} 님 참가`);
       return { ok: true };
     },
     setJoinInfo(info: JoinInfo | null, status: PartyStatus, msg?: string) {
-      if (!info && status !== 'connecting' && status !== 'error') {
-        qrEl.style.display = 'none';
-        return;
-      }
-      qrEl.style.display = '';
-      if (status === 'connecting') {
-        qrStatus.style.display = '';
-        qrStatus.textContent = '연결 중…';
-        qrBody.style.display = 'none';
-        qrWarn.style.display = 'none';
-      } else if (status === 'error') {
-        qrStatus.style.display = '';
-        qrStatus.textContent = msg || '연결에 실패했어요';
-        qrBody.style.display = 'none';
-        qrWarn.style.display = 'none';
-      } else if (info) {
-        qrStatus.style.display = 'none';
-        qrBody.style.display = '';
-        qrImg.src = info.qrDataUrl;
-        qrCode.textContent = `방 코드 ${info.roomId.slice(-6)}`;
-        qrUrl.textContent = info.url;
-        qrWarn.style.display = info.unreachable ? '' : 'none';
-      } else {
-        qrBody.style.display = 'none';
-        qrWarn.style.display = 'none';
-      }
+      lastJoin = { info, status, msg };
+      renderJoin();
+    },
+    onEntryMode(cb: (m: EntryMode) => void) {
+      entryCb = cb;
+      // 코어가 로비 표시 이후에 등록하므로, 등록 시점에 현재 탭을 바로 알린다
+      cb(entryMode);
     },
   };
 };

@@ -39,6 +39,9 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
   controls.enableDamping = true;
 
   let manual = false;
+  // prefers-reduced-motion: overview 선회 끄고 정지 샷, 평활을 무겁게(흔들림 최소), 컷도 평활 전환.
+  const RM =
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const curTarget = course.overviewShot.target.clone();
   camera.position.copy(course.overviewShot.position);
   camera.lookAt(curTarget);
@@ -56,6 +59,11 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
   const dirS = new THREE.Vector3(0, 0, -1);
   const prevFocus = new THREE.Vector3();
   let lastFocusId: number | null = null;
+
+  // 참여자 시점 고정: id의 구슬 전용 추적. 완주 시 결승점 3초 비춘 뒤 자동 복귀.
+  let followId: number | null = null;
+  let finishDwell = 0;
+  const finishPoint = new THREE.Vector3();
 
   const desiredPos = new THREE.Vector3();
   const desiredTgt = new THREE.Vector3();
@@ -160,9 +168,9 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
       const s = THREE.MathUtils.clamp(8 + sep * 0.9, 9, 26);
       desiredPos.copy(desiredTgt).addScaledVector(FINISH_DIR, s);
     } else {
-      // overview: overviewShot 주위를 천천히 선회
+      // overview: 정지 샷(RM) 또는 overviewShot 주위 천천히 선회
       const ov = course.overviewShot;
-      orbitA += dt * 0.09;
+      if (!RM) orbitA += dt * 0.09;
       tmp.copy(ov.position).sub(ov.target);
       const R = Math.max(Math.hypot(tmp.x, tmp.z), 1);
       const H = Math.max(tmp.y, 2);
@@ -175,12 +183,45 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
     }
   }
 
-  function clampCamera(snap: RaceSnapshot): void {
+  function smoothToDesired(dt: number): void {
+    const kp = 1 - Math.exp(-dt * (RM ? 1.6 : 3.2));
+    const kt = 1 - Math.exp(-dt * (RM ? 2.0 : 4.2));
+    camera.position.lerp(desiredPos, kp);
+    curTarget.lerp(desiredTgt, kt);
+  }
+
+  // 전용 추적샷: chase와 같은 평활, 높이 직접 추종이라 낙하 중에도 출렁이지 않는다.
+  function updateFollow(dt: number, m: Marble): void {
+    if (m.place === null) {
+      finishDwell = 0;
+      trackDirection(dt, m);
+      desiredTgt.copy(m.mesh.position);
+      desiredTgt.y += 0.6;
+      desiredPos.copy(m.mesh.position).addScaledVector(dirS, -9.5);
+      desiredPos.y = m.mesh.position.y + 5.2;
+      smoothToDesired(dt);
+      return;
+    }
+    // 완주: 처음 본 결승 위치를 3초간 비추다가 자동 복귀(follow null 효과)
+    if (finishDwell === 0) finishPoint.copy(m.mesh.position);
+    finishDwell += dt;
+    if (finishDwell >= 3) {
+      followId = null;
+      blendOnce = true;
+      shotTime = MIN_HOLD;
+      return;
+    }
+    desiredTgt.copy(finishPoint);
+    desiredPos.copy(finishPoint).addScaledVector(PACK_DIR, 12);
+    smoothToDesired(dt);
+  }
+
+  function clampCamera(snap: RaceSnapshot, near?: Marble | null): void {
     // 바닥 아래로 내려가지 않게(타깃보다 최소 1 위, 월드 최소 높이)
     if (camera.position.y < curTarget.y + 1) camera.position.y = curTarget.y + 1;
     if (camera.position.y < 0.8) camera.position.y = 0.8;
-    // 구슬에 너무 붙지 않게
-    const fp = snap.focus ? snap.focus.mesh.position : null;
+    // 구슬에 너무 붙지 않게(시점 고정이면 그 구슬 기준)
+    const fp = (near ?? snap.focus)?.mesh.position ?? null;
     if (fp) {
       const d = camera.position.distanceTo(fp);
       if (d < MIN_FOCUS_DIST && d > 1e-4) {
@@ -198,6 +239,21 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
     }
     if (dt < 0) dt = 0;
 
+    // 시점 고정 중이면 자동 샷 전환을 멈추고 전용 추적샷. 수동 모드보다 우선순위 낮음(위에서 처리).
+    const followed = followId !== null ? (snap.ranked.find((m) => m.id === followId) ?? null) : null;
+    if (followId !== null && !followed) {
+      // 대상이 사라지면 자동 연출로 평활 복귀
+      followId = null;
+      blendOnce = true;
+      shotTime = MIN_HOLD;
+    }
+    if (followed) {
+      updateFollow(dt, followed);
+      clampCamera(snap, followed);
+      camera.lookAt(curTarget);
+      return;
+    }
+
     if (snap.phase === 'racing' && snap.focus) trackDirection(dt, snap.focus);
     else {
       lastFocusId = null;
@@ -214,15 +270,15 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
 
     computeDesired(dt, snap);
 
-    const cut = shotTime === 0 && !blendOnce;
+    const cut = shotTime === 0 && !blendOnce && !RM;
     if (cut) {
       // 컷: 즉시 전환
       camera.position.copy(desiredPos);
       curTarget.copy(desiredTgt);
     } else {
-      // 같은 샷 안(또는 수동 복귀 직후): 지수 평활
-      const kp = 1 - Math.exp(-dt * 3.2);
-      const kt = 1 - Math.exp(-dt * 4.2);
+      // 같은 샷 안(또는 수동 복귀·RM 직후): 지수 평활
+      const kp = 1 - Math.exp(-dt * (RM ? 1.6 : 3.2));
+      const kt = 1 - Math.exp(-dt * (RM ? 2.0 : 4.2));
       camera.position.lerp(desiredPos, kp);
       curTarget.lerp(desiredTgt, kt);
     }
@@ -244,10 +300,22 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
     }
   }
 
+  // 참여자 시점: id 지정이면 전용 추적 시작, null이면 자동 연출로 평활 복귀
+  function follow(id: number | null): void {
+    followId = id;
+    finishDwell = 0;
+    if (id === null) {
+      blendOnce = true;
+      shotTime = MIN_HOLD;
+    }
+  }
+
   const director: CameraDirector = {
     update,
     setManual,
     isManual: () => manual,
+    follow,
+    following: () => followId,
   };
   // 현재 샷 이름 외부 노출(계약 외 부가 정보 — UI 표시용으로 읽을 수 있다)
   Object.defineProperty(director, 'shotName', {

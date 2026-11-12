@@ -61,7 +61,7 @@ export const section: SectionDef = {
     const qTilt = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), DISC_TILT); // +z 쪽이 낮다
     const nDisc = new THREE.Vector3(0, 1, 0).applyQuaternion(qTilt);
     const discPos = D.clone().addScaledVector(nDisc, -DISC_HH);
-    const disc = kit.kinCylinder(DISC_HH, DISC_R, discPos, qTilt, PASTEL.peach, { friction: 0.7, restitution: 0.25 });
+    const disc = kit.kinCylinder(DISC_HH, DISC_R, discPos, qTilt, PASTEL.peach, { friction: 0.4, restitution: 0.25 });
     const pegs = [0, 1, 2, 3].map((i) => {
       const a = (i / 4) * Math.PI * 2 + 0.4;
       const local = new THREE.Vector3(Math.cos(a) * 3.6, DISC_HH + 0.45, Math.sin(a) * 3.6);
@@ -82,6 +82,14 @@ export const section: SectionDef = {
       const wq = new THREE.Quaternion().setFromAxisAngle(Y, -a);
       const wp = new THREE.Vector3(D.x + dx * GR, D.y + 1.1, D.z + dz * GR);
       kit.box(0.25, 2.9, (Math.PI * GR) / GN + 0.08, wp, wq, PASTEL.wall, WALL_OP);
+    }
+
+    // 앞쪽 열린 호 바깥으로 모이는 V자 가이드: 원판에서 옆으로 크게 튕겨 나가 결승 접시를 벗어나는 것을 막는다
+    for (const sgn of [-1, 1]) {
+      const x0 = D.x + sgn * 6.5, z0 = D.z + 2.2, x1 = D.x + sgn * 3.0, z1 = D.z + 9.5;
+      const len = Math.hypot(x1 - x0, z1 - z0);
+      const gq = new THREE.Quaternion().setFromAxisAngle(Y, Math.atan2(x1 - x0, z1 - z0));
+      kit.box(0.25, 3.2, len / 2, new THREE.Vector3((x0 + x1) / 2, D.y - 2.2, (z0 + z1) / 2), gq, PASTEL.wall, WALL_OP);
     }
 
     // 원판 위 반투명 지붕(고리): 말뚝·충돌로 튀어 오른 구슬이 가드를 넘어 날아가지 않게 한다. 깔때기 구멍(반경 3)은 비워 둔다

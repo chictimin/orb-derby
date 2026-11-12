@@ -100,9 +100,12 @@ export const section: SectionDef = {
 
     // 교반 막대(구멍 위): 아치 막힘 방지 + 순위 섞기
     const barY = yHoleA + 1.55;
-    // 둥근 막대(가로 원기둥): 윗면이 평평하면 중심에 구슬이 얹혀 정지하므로 곡면으로
+    // 교반 막대: 중심이 비도록(허브 없음) 양쪽 반막대 2개. 윗면이 중심에 있으면 구슬이 얹혀 정지한다
     const qLay = new THREE.Quaternion().setFromAxisAngle(Zax, Math.PI / 2);
-    const bar = kit.kinCylinder(3.6, 0.3, new THREE.Vector3(ex, barY, ez), qLay.clone(), PASTEL.coral, { friction: 0.2, restitution: 0.5 });
+    const halves = [1, -1].map((sgn) => ({
+      sgn,
+      ...kit.kinCylinder(1.35, 0.3, new THREE.Vector3(ex + sgn * 2.25, barY, ez), qLay.clone(), PASTEL.coral, { friction: 0.2, restitution: 0.5 }),
+    }));
 
     // ── B. 못판 경사판(15°): 구멍에서 약 5 낙하해 받는다 ──
     const TH = THREE.MathUtils.degToRad(17);
@@ -126,7 +129,7 @@ export const section: SectionDef = {
     const nrm = new THREE.Vector3(Math.sin(TH), Math.cos(TH), 0);
     const rows = [3.0, 5.8, 8.6];
     rows.forEach((x, ri) => {
-      const zs = ri % 2 === 0 ? [-4.2, 0, 4.2] : [-2.1, 2.1];
+      const zs = ri % 2 === 0 ? [-3.6, 3.6] : [-1.8, 1.8];
       for (const z of zs) {
         const base = P(x, yp(x), z).addScaledVector(nrm, 0.5);
         kit.cylinder(0.6, 0.5, base, qPlate.clone(), PASTEL.yellow, { friction: 0.1, restitution: 0.6 });
@@ -186,7 +189,7 @@ export const section: SectionDef = {
       spawnPoints: spawn,
       update(t: number) {
         q.setFromAxisAngle(Yax, 1.35 * t).multiply(qLay);
-        kit.drive(bar.body, bar.mesh, null, q);
+        for (const h of halves) kit.drive(h.body, h.mesh, new THREE.Vector3(ex + h.sgn * 2.25 * Math.cos(1.35 * t), barY, ez - h.sgn * 2.25 * Math.sin(1.35 * t)), q);
       },
     };
   },
