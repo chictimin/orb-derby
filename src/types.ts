@@ -209,3 +209,16 @@ export interface UI {
   onEntryMode?(cb: (m: EntryMode) => void): void;
 }
 export type EntryMode = 'manual' | 'qr';
+
+// ───────── 배경음악(코어 src/audio.ts) — UI는 컨트롤만 ─────────
+export interface AudioState {
+  muted: boolean;
+  /** 0..1 */
+  volume: number;
+}
+export interface UI {
+  /** 음악 컨트롤(음소거 토글·볼륨 슬라이더) 사용자가 바꾸면 cb(새 상태). 키보드 M = 음소거 토글(입력란 제외) */
+  onAudio?(cb: (s: AudioState) => void): void;
+  /** 코어가 현재 상태를 알려 준다(초기 1회 + 변경 시). 컨트롤 표시 동기화용 */
+  setAudioState?(s: AudioState): void;
+}

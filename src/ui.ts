@@ -1,6 +1,6 @@
 // 워커 B: 파티 게임풍 한국어 UI (파스텔·둥근 모서리·두꺼운 글자).
 // 이름은 전부 textContent로 넣어 HTML 주입을 방지한다. CSS는 <style>로 주입.
-import type { CreateUI, EntryMode, JoinInfo, Marble, PartyStatus, RaceSnapshot, WinMode } from './types';
+import type { AudioState, CreateUI, EntryMode, JoinInfo, Marble, PartyStatus, RaceSnapshot, WinMode } from './types';
 
 const LS_KEY = 'orb-derby:names';
 const DEFAULT_NAMES = ['철수', '영희', '민수', '지영', '태호', '수진'];
@@ -43,6 +43,18 @@ const CSS = `
 .odb-qrclear{margin-top:4px;padding:7px 14px;border:2px solid #e5ddff;border-radius:999px;background:#fff;color:#6b5c78;font-size:12px;font-weight:900;cursor:pointer}
 .odb-qrhint{font-size:13px;font-weight:800;color:#a8245e;margin:8px 0 0}
 .odb-qrcount{font-size:12px;font-weight:800;color:#6b5c78;margin:10px 0 0}
+.odb-audio{display:flex;align-items:center;gap:8px}
+.odb-amute{border:2px solid #e5ddff;background:#fff;color:#6b5c78;border-radius:50%;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:0 0 auto;padding:0}
+.odb-avol{flex:1;accent-color:#6a4fd8;min-width:0}
+.odb-avexpand{display:none;border:2px solid #e5ddff;background:#fff;color:#6b5c78;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap}
+.odb-lobbyaudio{justify-content:center;margin-top:12px}
+.odb-hudaudio{margin-top:10px}
+.odb-credit{font-size:11px;font-weight:700;color:#6b5c78;margin:8px 0 0;text-align:center}
+.odb-credit a{color:#6a4fd8}
+@media (max-width:640px){
+.odb-audio .odb-avol{display:none}
+.odb-audio.open .odb-avol{display:block}
+.odb-audio .odb-avexpand{display:inline-block}}
 .odb-count{top:38%;left:50%;transform:translate(-50%,-50%);font-size:min(120px,22vw);font-weight:900;color:#fff;text-shadow:0 6px 0 #e0508a,0 12px 32px rgba(224,80,138,.5);-webkit-text-stroke:3px #a8245e;paint-order:stroke fill}
 .odb-hud{top:12px;left:12px;background:rgba(255,247,251,.94);border:3px solid #ffd1e3;border-radius:20px;padding:12px 14px;width:248px;box-shadow:0 6px 24px rgba(255,143,178,.3)}
 .odb-hudhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
@@ -209,6 +221,78 @@ export const createUI: CreateUI = (root) => {
   let toggleCb: () => void = () => {};
   let speedCb: (x: number) => void = () => {};
   let followCb: (id: number | null) => void = () => {};
+  let audioCb: (s: AudioState) => void = () => {};
+  let audioMuted = false;
+  let audioVolume = 0.5;
+  const audioSyncs: ((s: AudioState) => void)[] = [];
+  function syncAudioControls(): void {
+    const s = { muted: audioMuted, volume: audioVolume };
+    audioSyncs.forEach((fn) => fn(s));
+  }
+  function pushAudio(s: AudioState): void {
+    audioMuted = !!s.muted;
+    audioVolume = Math.max(0, Math.min(1, s.volume));
+    syncAudioControls();
+    audioCb({ muted: audioMuted, volume: audioVolume });
+  }
+
+  // 음악 컨트롤(음소거 토글 + 볼륨 슬라이더). 로비·HUD에 각 1개씩 두어 같은 상태를 공유한다.
+  const SVG_SND_ON =
+    '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+  const SVG_SND_OFF =
+    '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z" fill="currentColor" stroke="none"/><line x1="16" y1="9" x2="22" y2="15"/><line x1="22" y1="9" x2="16" y2="15"/></svg>';
+  function makeAudioControl(): { el: HTMLElement; sync: (s: AudioState) => void } {
+    const box = document.createElement('div');
+    box.className = 'odb-audio';
+    const mute = document.createElement('button');
+    mute.className = 'odb-amute';
+    mute.setAttribute('aria-pressed', 'false');
+    const iconOn = document.createElement('span');
+    iconOn.innerHTML = SVG_SND_ON;
+    iconOn.setAttribute('aria-hidden', 'true');
+    const iconOff = document.createElement('span');
+    iconOff.innerHTML = SVG_SND_OFF;
+    iconOff.setAttribute('aria-hidden', 'true');
+    iconOff.style.display = 'none';
+    mute.appendChild(iconOn);
+    mute.appendChild(iconOff);
+    mute.onclick = () => pushAudio({ muted: !audioMuted, volume: audioVolume });
+    const vol = document.createElement('input');
+    vol.type = 'range';
+    vol.min = '0';
+    vol.max = '100';
+    vol.step = '1';
+    vol.className = 'odb-avol';
+    vol.setAttribute('aria-label', '음악 크기');
+    vol.oninput = () => {
+      const v = Number(vol.value) / 100;
+      pushAudio({ muted: v <= 0 ? audioMuted : false, volume: v });
+    };
+    const expand = document.createElement('button');
+    expand.className = 'odb-avexpand';
+    expand.textContent = '크기';
+    expand.setAttribute('aria-expanded', 'false');
+    expand.setAttribute('aria-label', '음악 크기 조절 펼치기');
+    expand.onclick = () => {
+      const open = box.classList.toggle('open');
+      expand.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    box.appendChild(mute);
+    box.appendChild(vol);
+    box.appendChild(expand);
+    function sync(s: AudioState): void {
+      iconOn.style.display = s.muted ? 'none' : '';
+      iconOff.style.display = s.muted ? '' : 'none';
+      const label = s.muted ? '음악 켜기 (단축키 M)' : '음악 끄기 (단축키 M)';
+      mute.setAttribute('aria-label', label);
+      mute.title = label;
+      mute.setAttribute('aria-pressed', s.muted ? 'true' : 'false');
+      vol.value = String(Math.round(Math.max(0, Math.min(1, s.volume)) * 100));
+    }
+    audioSyncs.push(sync);
+    sync({ muted: audioMuted, volume: audioVolume });
+    return { el: box, sync };
+  }
   let shownFollowing: number | null = null;
   const SPEEDS = [0.5, 1, 2, 4];
   // 화면에 보이는 현재 배속(키보드 P/Space 일시정지·재개용). renderHud에서 갱신.
@@ -537,6 +621,19 @@ export const createUI: CreateUI = (root) => {
     selectTab(entryMode === 'manual' ? 'qr' : 'manual', true);
   });
 
+  // 로비 음악 컨트롤 + 크레딧
+  const lobbyAudio = makeAudioControl();
+  lobbyAudio.el.classList.add('odb-lobbyaudio');
+  lobbyEl.appendChild(lobbyAudio.el);
+  const credit = el('div', 'odb-credit', lobbyEl);
+  credit.textContent = '음악: MintoDog (CC0) ';
+  const creditLink = document.createElement('a');
+  creditLink.href = 'audio/CREDITS.md';
+  creditLink.target = '_blank';
+  creditLink.rel = 'noopener';
+  creditLink.textContent = 'CREDITS';
+  credit.appendChild(creditLink);
+
   // ── 카운트다운 ──
   let countTimer = 0;
   function hideAll(): void {
@@ -596,10 +693,16 @@ export const createUI: CreateUI = (root) => {
   // 키보드 1~4 배속 전환, P/Space 일시정지·재개. 입력란 타이핑 중이거나 HUD가 닫혀 있으면 무시.
   // 포커스가 버튼 위일 때 Space는 네이티브 버튼 동작에 맡긴다.
   window.addEventListener('keydown', (e) => {
-    if (hudEl.style.display === 'none') return;
     const ae = document.activeElement;
     const typing =
       !!ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT' || (ae as HTMLElement).isContentEditable);
+    // M = 음소거 토글. 로비·HUD 어디서든 된다(입력란 포커스 중 제외).
+    if ((e.key === 'm' || e.key === 'M') && !typing) {
+      e.preventDefault();
+      pushAudio({ muted: !audioMuted, volume: audioVolume });
+      return;
+    }
+    if (hudEl.style.display === 'none') return;
     if (e.key === 'p' || e.key === 'P' || (e.key === ' ' && !typing)) {
       if (ae && ae.tagName === 'BUTTON') return;
       e.preventDefault();
@@ -614,6 +717,11 @@ export const createUI: CreateUI = (root) => {
 
   hudEl.appendChild(camBtn);
   hudEl.appendChild(speedsBox);
+
+  // HUD 음악 컨트롤(로비 것과 상태 공유)
+  const hudAudio = makeAudioControl();
+  hudAudio.el.classList.add('odb-hudaudio');
+  hudEl.appendChild(hudAudio.el);
 
   // 시점 고정 칩(따라가는 구슬이 있을 때만) — 누르면 자동 연출로
   const followChip = document.createElement('button');
@@ -929,6 +1037,14 @@ export const createUI: CreateUI = (root) => {
       entryCb = cb;
       // 코어가 로비 표시 이후에 등록하므로, 등록 시점에 현재 탭을 바로 알린다
       cb(entryMode);
+    },
+    onAudio(cb: (s: AudioState) => void) {
+      audioCb = cb;
+    },
+    setAudioState(s: AudioState) {
+      audioMuted = !!s.muted;
+      audioVolume = Math.max(0, Math.min(1, s.volume));
+      syncAudioControls();
     },
   };
 };

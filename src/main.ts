@@ -7,6 +7,7 @@ import { allSections, assembleCourse } from './course/registry';
 import { createCameraDirector } from './camera';
 import { createUI } from './ui';
 import { startPartyHost } from './party/host';
+import { createMusic } from './audio';
 import type { EntryMode, PartyHost } from './types';
 import { MARBLE_RADIUS, type Marble, type Phase, type RaceSnapshot, type WinMode } from './types';
 
@@ -20,7 +21,11 @@ await RAPIER.init();
 
 const app = document.getElementById('app')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// 해상도(캡틴: 사양 부담 → 낮춤). 기본 상한 1.25, ?quality=high면 2. 느리면 아래 자동 하향 단계로 내려간다.
+const QUALITY_HIGH = new URLSearchParams(location.search).get('quality') === 'high';
+const PR_STEPS = QUALITY_HIGH ? [2, 1.5, 1.25, 1] : [1.25, 1, 0.8];
+let prStep = 0;
+renderer.setPixelRatio(Math.min(devicePixelRatio, PR_STEPS[0]));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 app.appendChild(renderer.domElement);
@@ -36,9 +41,9 @@ app.appendChild(labelRenderer.domElement);
   // 접근성(캡틴 지적 3): 글자는 항상 흰 배경 위 진한 색(대비 9.5:1). 구슬 색은 테두리(장식)로만 쓴다.
   // 완주는 색이나 투명도가 아니라 텍스트로도 구분한다(1.4.1). 선두 '주인공' 강조는 캡틴 요청으로 없앴다(라벨 크기 통일).
   // 위치: 구슬 꼭대기 위 LABEL_LIFT 지점에 라벨 중심, margin-top으로 살짝 더 띄운다.
-  st.textContent = `.orb-label{font:800 13px/1.1 system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;color:#2a2230;background:#fff;border:2px solid var(--c);border-radius:999px;padding:3px 8px;white-space:nowrap;margin-top:-12px}
-.orb-label .tag{font-size:11px;margin-left:5px;color:#5b4a68}
-.orb-label.done{border-style:dashed}`;
+  // 캡틴 요청: 알약 배경 없이 검은 글씨 + 하얀 외곽선. 대비는 외곽선(흰) 위 검정 21:1로 배경과 무관하게 확보.
+  st.textContent = `.orb-label{font:800 14px/1.1 system-ui,-apple-system,"Apple SD Gothic Neo",sans-serif;color:#111;white-space:nowrap;margin-top:-12px;-webkit-text-stroke:3.5px #fff;paint-order:stroke fill;text-shadow:0 0 3px #fff}
+.orb-label .tag{font-size:11px;margin-left:4px;color:#333}`;
   document.head.appendChild(st);
 }
 const LABEL_FAR = 45;
@@ -54,7 +59,7 @@ scene.add(new THREE.HemisphereLight(0xffffff, 0xb0c4de, 1.1));
 const sun = new THREE.DirectionalLight(0xffffff, 1.6);
 sun.position.set(40, 80, 20);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(QUALITY_HIGH ? 2048 : 1024, QUALITY_HIGH ? 2048 : 1024);
 Object.assign(sun.shadow.camera, { left: -120, right: 120, top: 120, bottom: -120, far: 400 });
 scene.add(sun);
 
@@ -135,7 +140,6 @@ function spawn(names: string[]) {
     const tag = document.createElement('span');
     tag.className = 'tag';
     el.append(nm, tag);
-    el.style.setProperty('--c', color);
     const lb = new CSS2DObject(el);
     lb.position.copy(pos);
     scene.add(lb);
@@ -257,6 +261,13 @@ function toLobby() {
 
 ui.onToggleManual(() => director.setManual(!director.isManual()));
 ui.onFollow?.((id) => director.follow?.(id));
+const music = createMusic();
+ui.onAudio?.((st) => {
+  music.setMuted(st.muted);
+  music.setVolume(st.volume);
+  ui.setAudioState?.(music.getState());
+});
+ui.setAudioState?.(music.getState());
 toLobby();
 
 // QR 참가(P2P): 로비에서 'QR 참가' 탭일 때만 방을 연다(캡틴: 직접 입력 / QR 따로). 레이스 중에도 방은 유지되고
@@ -298,6 +309,7 @@ ui.onSpeed?.((x) => (speed = Math.max(0, x))); // 0 = 일시정지(접근성 2.2
 const autoN = Number(qs.get('auto')) || 0;
 if (autoN >= 2) startRace(Array.from({ length: autoN }, (_, i) => `P${i + 1}`), qs.get('mode') === 'last' ? 'last' : 'first');
 (window as unknown as { __orb: unknown }).__orb = {
+  gfx: () => ({ ...renderer.info.render, meshes: (() => { let n = 0, t = 0; scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) { n++; const m = (o as THREE.Mesh).material as THREE.Material; if (m.transparent) t++; } }); return { n, transparent: t }; })() }),
   state: () => ({
     phase,
     t: raceT,
@@ -317,8 +329,33 @@ let acc = 0;
 let last = performance.now();
 let lastShownCount = 3;
 let resultShown = false;
+// 자동 품질 하향: 2초 평균 프레임이 22ms(약 45fps)를 넘으면 해상도를 한 단계 내리고, 마지막 단계에선 그림자를 끈다
+let perfAcc = 0;
+let perfN = 0;
+function autoQuality(frameMs: number) {
+  perfAcc += frameMs;
+  if (++perfN < 120) return;
+  const avg = perfAcc / perfN;
+  perfAcc = 0;
+  perfN = 0;
+  if (avg <= 22) return;
+  if (prStep < PR_STEPS.length - 1) {
+    prStep++;
+    renderer.setPixelRatio(Math.min(devicePixelRatio, PR_STEPS[prStep]));
+    console.info(`[quality] 평균 ${avg.toFixed(1)}ms → pixelRatio ${PR_STEPS[prStep]}`);
+  } else if (renderer.shadowMap.enabled) {
+    renderer.shadowMap.enabled = false;
+    scene.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.Material | undefined;
+      if (m) m.needsUpdate = true;
+    });
+    console.info(`[quality] 평균 ${avg.toFixed(1)}ms → 그림자 끔`);
+  }
+}
+
 renderer.setAnimationLoop((now) => {
   const dt = Math.min((now - last) / 1000, 0.1);
+  if (!document.hidden) autoQuality(now - last);
   last = now;
 
   if (phase === 'countdown') {
@@ -359,6 +396,7 @@ renderer.setAnimationLoop((now) => {
     }
   }
   director.update(dt, snap);
+  music.update(dt, phase, mode, snap.ranked.find((m) => m.place === null)?.progress ?? 1, snap.ranked.filter((m) => m.place === null).length, winnerM !== null);
   for (const m of marbles) {
     const lb = labels.get(m.id);
     if (!lb) continue;
