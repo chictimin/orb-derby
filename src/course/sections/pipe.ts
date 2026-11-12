@@ -203,6 +203,25 @@ export const section: SectionDef = {
     // ── 합류 깔때기 ──
     funnel(A.x, A.z, F2.rTop, F2.rBot, FUN2_Y + (F2.rTop - F2.rBot) * 0.65, FUN2_Y, 20, PASTEL.pink, 2.6);
 
+    // 합류 깔때기 교반 날개: 파이프 끝에서 접선으로 들어온 구슬이 깔때기를 오래 맴돌지 않게
+    // 경사면에 선 낮은 방사형 판 3장. 맴돌던 구슬이 판에 막혀 경사를 따라 구멍으로 내려간다(구멍 반경은 그대로)
+    {
+      const yTop2 = FUN2_Y + (F2.rTop - F2.rBot) * 0.65;
+      const phi = Math.atan2(yTop2 - FUN2_Y, F2.rTop - F2.rBot);
+      const r0 = 2.6, r1 = 7.4, rc = (r0 + r1) / 2;
+      for (const deg of [30, 150, 250]) {
+        const a = deg * DEG;
+        const u = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+        const sV = u.clone().multiplyScalar(Math.cos(phi)).add(new THREE.Vector3(0, Math.sin(phi), 0));
+        const nV = u.clone().multiplyScalar(-Math.sin(phi)).add(new THREE.Vector3(0, Math.cos(phi), 0));
+        const tV = sV.clone().cross(nV);
+        const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(sV, nV, tV));
+        const ySurf = FUN2_Y + (rc - F2.rBot) * Math.tan(phi);
+        const pos = W(A.x, ySurf, A.z).addScaledVector(u, rc).addScaledVector(nV, 0.5);
+        kit.box(((r1 - r0) / 2) / Math.cos(phi), 0.6, 0.25, pos, q, PASTEL.coral, {});
+      }
+    }
+
     // ── 중심선/루트 ──
     const exit = W(A.x, FUN2_Y - 0.5, A.z);
     const main: THREE.Vector3[] = [];

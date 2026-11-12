@@ -9,6 +9,7 @@ import { createUI } from './ui';
 import { startPartyHost } from './party/host';
 import { createMusic } from './audio';
 import { createConfetti } from './confetti';
+import { track } from './analytics';
 import type { EntryMode, PartyHost } from './types';
 import { MARBLE_RADIUS, type Marble, type Phase, type RaceSnapshot, type WinMode } from './types';
 
@@ -272,6 +273,7 @@ function physicsStep() {
     }
     if (marbles.every((m) => m.place !== null)) {
       phase = 'done';
+      track('race_end', { participants: marbles.length, mode, duration_s: Math.round(raceT) });
       doneTimer = 2.5; // 결과 띄우기 전 잠깐 여운
     }
   }
@@ -291,6 +293,7 @@ function startRace(names: string[], m: WinMode) {
   spawn(names);
   phase = 'countdown';
   countdownLeft = 3.999;
+  track('race_start', { participants: names.length, mode: m });
   ui.showCountdown(3);
 }
 
