@@ -12,8 +12,8 @@ const CSS = `
 .odb-panel,.odb-panel *{box-sizing:border-box}
 .odb-panel{position:absolute;font-family:system-ui,-apple-system,"Pretendard","Apple SD Gothic Neo",sans-serif;color:#4a3f55}
 .odb-lobby{top:50%;left:50%;transform:translate(-50%,-50%);background:#fff7fb;border:4px solid #ffd1e3;border-radius:28px;padding:28px 30px;width:min(420px,calc(100vw - 32px));box-shadow:0 12px 40px rgba(255,143,178,.35);text-align:center}
-.odb-wordmark{font-size:12px;font-weight:900;letter-spacing:4px;color:#6a4fd8;margin:0 0 2px}
-.odb-title{font-size:30px;font-weight:900;letter-spacing:-.5px;margin:0 0 4px;color:#e0508a}
+.odb-eyebrow{font-size:13px;font-weight:800;letter-spacing:2px;color:#c23375;margin:0 0 6px}
+.odb-headline{font-size:40px;font-weight:900;letter-spacing:1px;margin:0 0 4px;color:#e0508a}
 .odb-sub{font-size:14px;font-weight:700;color:#6b5c78;margin:0 0 14px}
 .odb-label{display:block;font-size:13px;font-weight:800;color:#7a6a85;text-align:left;margin:10px 0 6px}
 .odb-names{width:100%;min-height:130px;resize:vertical;border:3px solid #ffe0ec;border-radius:16px;padding:10px 12px;font-size:15px;font-weight:700;color:#4a3f55;background:#fffdfd;outline:none}
@@ -76,8 +76,6 @@ const CSS = `
 .odb-panel input:focus-visible{outline:3px solid #6a4fd8;outline-offset:1px}
 .odb-side{top:12px;right:12px;width:300px;z-index:40}
 .odb-sidetoggle{display:none}
-.odb-sidesearch{width:100%;background:#fff;border:none;border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;color:#111;outline:none;box-shadow:0 2px 10px rgba(0,0,0,.25);margin-bottom:4px}
-.odb-sidesearch::placeholder{color:#595959;opacity:1}
 .odb-sidelist{list-style:none;margin:0;padding:0;display:grid;gap:0;max-height:calc(100vh - 80px)}
 .odb-sidelist.cols2{grid-auto-flow:column;column-gap:14px}
 .odb-siderowbtn{display:flex;align-items:center;gap:6px;width:100%;min-height:24px;border:none;background:transparent;padding:3px 4px 3px 7px;font-size:13px;font-weight:800;line-height:1.35;color:#111;cursor:pointer;text-align:left;-webkit-text-stroke:3px #fff;paint-order:stroke fill}
@@ -88,8 +86,8 @@ const CSS = `
 @media (max-width:760px){
 .odb-side{width:min(260px,calc(100vw - 24px))}
 .odb-sidetoggle{display:block;border:none;background:rgba(255,255,255,.92);color:#111;font-size:13px;font-weight:800;border-radius:999px;padding:8px 14px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.25);white-space:nowrap}
-.odb-sidesearch,.odb-sidelist{display:none}
-.odb-side.open .odb-sidesearch,.odb-side.open .odb-sidelist{display:block}
+.odb-sidelist{display:none}
+.odb-side.open .odb-sidelist{display:block}
 .odb-side.open .odb-sidelist{margin-top:4px}
 }
 .odb-cambtn{margin-top:10px;width:100%;padding:9px 0;border:none;border-radius:999px;background:#6a4fd8;color:#fff;font-size:14px;font-weight:900;cursor:pointer;box-shadow:0 4px 0 #5740b8}
@@ -133,7 +131,7 @@ const CSS = `
 .odb-time{font-size:14px}
 .odb-speed{font-size:11px}
 .odb-lobby,.odb-result{padding:20px 18px}
-.odb-title{font-size:24px}
+.odb-headline{font-size:32px}
 .odb-winner{font-size:34px}
 }
 @media (max-width:919px){
@@ -386,10 +384,12 @@ export const createUI: CreateUI = (root) => {
   }
 
   // ── 로비 ──
-  const wordmark = el('p', 'odb-wordmark', lobbyEl);
-  wordmark.textContent = 'ORB DERBY';
-  const title = el('h1', 'odb-title', lobbyEl);
-  title.textContent = '구슬 경주 추첨기';
+  // index.html은 PM 소유라 직접 고치지 않고 런타임에 문서 제목을 지정한다
+  document.title = 'Orb Derby — 구슬 경주 추첨기';
+  const eyebrow = el('p', 'odb-eyebrow', lobbyEl);
+  eyebrow.textContent = '구슬 경주 추첨기';
+  const headline = el('h1', 'odb-headline', lobbyEl);
+  headline.textContent = 'ORB DERBY';
   const sub = el('p', 'odb-sub', lobbyEl);
   sub.textContent = '이름을 넣고 누가 뽑힐지 굴려보세요';
 
@@ -787,12 +787,6 @@ export const createUI: CreateUI = (root) => {
   sideToggle.setAttribute('aria-expanded', 'false');
   sideToggle.setAttribute('aria-controls', 'odb-sidelist');
   sideEl.appendChild(sideToggle);
-  const sideSearch = document.createElement('input');
-  sideSearch.type = 'search';
-  sideSearch.className = 'odb-sidesearch';
-  sideSearch.placeholder = '이름 검색';
-  sideSearch.setAttribute('aria-label', '참가자 검색');
-  sideEl.appendChild(sideSearch);
   const sideList = document.createElement('ol');
   sideList.className = 'odb-sidelist';
   sideList.id = 'odb-sidelist';
@@ -802,9 +796,6 @@ export const createUI: CreateUI = (root) => {
     sideToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   };
   let lastSnap: RaceSnapshot | null = null;
-  sideSearch.addEventListener('input', () => {
-    if (lastSnap) renderSideList(lastSnap, shownFollowing);
-  });
   window.addEventListener('resize', () => {
     if (lastSnap && sideEl.style.display !== 'none') renderSideList(lastSnap, shownFollowing);
   });
@@ -836,15 +827,12 @@ export const createUI: CreateUI = (root) => {
 
   // 행 시각 높이 24px(13px/1.35 + 패딩). 2열 전환 판단용 추정치.
   const SIDE_ROW_H = 24;
-  const SIDE_SEARCH_H = 48;
   function renderSideList(snap: RaceSnapshot, following: number | null): void {
     // 목록 안에서 탭 이동 중이면 다시 그리지 않는다(포커스 유지)
     if (sideList.contains(document.activeElement)) return;
-    const q = sideSearch.value.trim().toLowerCase();
     sideList.replaceChildren();
     let n = 0;
     snap.ranked.forEach((m, i) => {
-      if (q && !m.name.toLowerCase().includes(q)) return;
       n++;
       const isWinner = snap.winner !== null && m.id === snap.winner.id;
       const st = isWinner
@@ -886,7 +874,7 @@ export const createUI: CreateUI = (root) => {
     });
     sideToggle.textContent = `참가자 ${snap.ranked.length}명`;
     // 화면 높이가 모자라면 스크롤 대신 2열로 흐르게
-    if (n > 1 && n * SIDE_ROW_H + SIDE_SEARCH_H > window.innerHeight - 24) {
+    if (n > 1 && n * SIDE_ROW_H > window.innerHeight - 24) {
       sideList.classList.add('cols2');
       sideList.style.gridTemplateRows = `repeat(${Math.ceil(n / 2)}, ${SIDE_ROW_H}px)`;
     } else {

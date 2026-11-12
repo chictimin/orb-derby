@@ -71,6 +71,14 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
   const winnerPoint = new THREE.Vector3();
   let lastWinnerId: number | null = null;
 
+  // 타워 축 추정치(타워 바깥쪽 방향을 구할 때 쓴다). overviewShot.target = 코스 전체 조망 중심.
+  function outwardDir(p: THREE.Vector3, out: THREE.Vector3): void {
+    const ax = course.overviewShot.target;
+    out.set(p.x - ax.x, 0, p.z - ax.z);
+    if (out.lengthSq() < 1e-4) out.set(0.6, 0, 0.75);
+    out.normalize();
+  }
+
   const desiredPos = new THREE.Vector3();
   const desiredTgt = new THREE.Vector3();
   const tmp = new THREE.Vector3();
@@ -266,11 +274,23 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
         blendOnce = true;
         shotTime = MIN_HOLD;
       } else {
-        // 타깃은 우승 구슬 + 2.5 위(구슬과 위로 솟는 색종이가 화면 중앙에 들어오게),
-        // 카메라는 그 점에서 측면·위쪽 16 거리(FINISH_DIR 고각 약 26도 → 아래로 내려다봄)
-        desiredTgt.copy(winnerPoint);
-        desiredTgt.y += 2.5;
-        desiredPos.copy(desiredTgt).addScaledVector(FINISH_DIR, 16);
+        // finale 깔때기(반경 15.5) 안쪽에 카메라가 들어가 밑면을 보는 문제를 피한다.
+        // 타워 축 기준 바깥쪽 수평 거리에서 거의 수평으로 바라본다.
+        const first = snap.mode === 'first';
+        outwardDir(winnerPoint, tmp);
+        if (first) {
+          // 결승 접시: 타깃 접시+6, 카메라 접시+3·수평 26 → 위로 약 6.6도. 구슬은 화면 하단, 색종이는 중앙.
+          desiredTgt.copy(winnerPoint);
+          desiredTgt.y += 6;
+          desiredPos.copy(winnerPoint);
+          desiredPos.y += 3;
+          desiredPos.addScaledVector(tmp, 26);
+        } else {
+          // 꼴등(탑 중간일 수 있음): 해당 구슬 수평 바깥쪽 20에서 수평으로
+          desiredTgt.copy(winnerPoint);
+          desiredTgt.y += 1.5;
+          desiredPos.copy(desiredTgt).addScaledVector(tmp, 20);
+        }
         smoothToDesired(dt);
         clampCamera(snap);
         camera.lookAt(curTarget);

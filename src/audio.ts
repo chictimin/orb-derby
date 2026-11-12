@@ -9,10 +9,12 @@ const SRC: Record<Track, string> = {
   climax: 'audio/climax.mp3',
 };
 const FADE = 0.9; // 초
+/** 슬라이더 100%일 때 실제 출력(캡틴: 음악이 너무 큼). 저장된 볼륨에도 적용되도록 상한으로 조절 */
+const MAX_GAIN = 0.55;
 const LS = 'orb-derby:audio';
 
 export function createMusic() {
-  let state: AudioState = { muted: false, volume: 0.5 };
+  let state: AudioState = { muted: false, volume: 0.4 };
   try {
     const raw = localStorage.getItem(LS);
     if (raw) state = { ...state, ...JSON.parse(raw) };
@@ -66,7 +68,7 @@ export function createMusic() {
         const late = mode === 'first' ? leaderProgress >= 0.85 || decided : unfinished <= 3;
         want = late || phase === 'done' ? 'climax' : 'race';
       }
-      const master = state.muted || !unlocked ? 0 : state.volume;
+      const master = state.muted || !unlocked ? 0 : state.volume * MAX_GAIN;
       for (const k of Object.keys(els) as Track[]) {
         const target = k === want ? 1 : 0;
         const step = dt / FADE;

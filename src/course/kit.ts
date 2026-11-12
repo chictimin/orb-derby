@@ -47,6 +47,29 @@ export function mat(color: number, opacity = 1): THREE.MeshStandardMaterial {
   return m;
 }
 
+/**
+ * 반투명 유리 재질(가드레일 공용). depthWrite 끔 → 반투명 면끼리 서로를 가려 깜빡이거나 사라지는 정렬 문제 완화.
+ * 색·투명도별로 하나만 만들어 공유한다.
+ */
+const glass = new Map<string, THREE.MeshStandardMaterial>();
+export function glassMat(color: number, opacity = 0.35): THREE.MeshStandardMaterial {
+  const key = `${color}:${opacity}`;
+  let m = glass.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.3,
+      metalness: 0,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    glass.set(key, m);
+  }
+  return m;
+}
+
 export function makeKit(ctx: SectionCtx) {
   const { R, world, scene } = ctx;
 
@@ -155,6 +178,78 @@ export function makeKit(ctx: SectionCtx) {
       const g = new THREE.LatheGeometry(pts, 48);
       g.translate(center.x, center.y, center.z);
       return trimeshBody(g, color, { ...opt, opacity: opt.opacity ?? 1 });
+    },
+    /**
+     * 매끈한 가드레일(캡틴: 이음새 겹침 없이). 보이는 벽 = 경로를 따라 한 장으로 이어진 리본 메시 1개(겹침·두 번 칠 없음),
+     * 물리 = 구간마다 보이지 않는 cuboid(두께 0.5, 기존과 같은 충돌 동작).
+     * path: 벽 아래 가장자리 점들(바닥 표면 높이, 위→아래 순서 무관). 급하게 꺾이는 곳(U턴 등)은 쓰지 말고 기존 box 유지.
+     * side: 벽 두께를 경로의 어느 쪽으로 둘지(+1 = 진행 방향 기준 오른쪽 바깥). 리본은 경로 위치에 그린다.
+     */
+    wallRibbon: (path: THREE.Vector3[], height: number, side: 1 | -1 = 1, color = PASTEL.wall, opt: PhysOpt = {}) => {
+      const pos: number[] = [];
+      const idx: number[] = [];
+      for (let i = 0; i < path.length; i++) {
+        const p = path[i];
+        pos.push(p.x, p.y, p.z, p.x, p.y + height, p.z);
+        if (i > 0) {
+          const k = i * 2;
+          idx.push(k - 2, k, k - 1, k - 1, k, k + 1);
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setIndex(idx);
+      g.computeVertexNormals();
+      const mesh = new THREE.Mesh(g, glassMat(color, opt.opacity ?? 0.35));
+      mesh.renderOrder = 2;
+      scene.add(mesh);
+      // 물리: 세그먼트마다 보이지 않는 상자(바깥쪽으로 두께), 이음매가 비지 않게 양끝 0.25 연장
+      const up = new THREE.Vector3(0, 1, 0);
+      for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i];
+        const b = path[i + 1];
+        const d = new THREE.Vector3().subVectors(b, a);
+        const len = d.length();
+        if (len < 1e-4) continue;
+        const f = d.clone().normalize();
+        const out = new THREE.Vector3().crossVectors(f, up).normalize().multiplyScalar(side);
+        const c = a.clone().add(b).multiplyScalar(0.5).addScaledVector(out, 0.25).addScaledVector(up, height / 2);
+        const m = new THREE.Matrix4().makeBasis(out, up.clone().projectOnPlane(f).normalize(), f);
+        const q = new THREE.Quaternion().setFromRotationMatrix(m);
+        const body = world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(c.x, c.y, c.z).setRotation(q));
+        world.createCollider(
+          R.ColliderDesc.cuboid(0.25, height / 2, len / 2 + 0.25)
+            .setFriction(opt.friction ?? 0.05)
+            .setRestitution(opt.restitution ?? 0.5),
+          body,
+        );
+      }
+      return mesh;
+    },
+    /**
+     * 둥근 테두리 벽(깔때기 림·접시 테두리). 보이는 벽 = 뚜껑 없는 원통 옆면 1장, 물리 = 보이지 않는 상자 segments개.
+     * center = 벽 아래쪽 원 중심, radius = 안쪽 반경.
+     */
+    rimWall: (center: THREE.Vector3, radius: number, height: number, color = PASTEL.wall, opt: PhysOpt & { segments?: number } = {}) => {
+      const g = new THREE.CylinderGeometry(radius, radius, height, 64, 1, true);
+      const mesh = new THREE.Mesh(g, glassMat(color, opt.opacity ?? 0.35));
+      mesh.position.set(center.x, center.y + height / 2, center.z);
+      mesh.renderOrder = 2;
+      scene.add(mesh);
+      const n = opt.segments ?? Math.max(16, Math.round(radius * 3));
+      const half = (Math.PI * (radius + 0.25)) / n + 0.08;
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2;
+        const x = center.x + Math.cos(a) * (radius + 0.25);
+        const z = center.z + Math.sin(a) * (radius + 0.25);
+        const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -a);
+        const body = world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(x, center.y + height / 2, z).setRotation(q));
+        world.createCollider(
+          R.ColliderDesc.cuboid(0.25, height / 2, half).setFriction(opt.friction ?? 0.05).setRestitution(opt.restitution ?? 0.5),
+          body,
+        );
+      }
+      return mesh;
     },
     /** 장식 전용(충돌 없음) */
     deco: (geom: THREE.BufferGeometry, pos: THREE.Vector3, quat = Q0, color = PASTEL.pink) => {
