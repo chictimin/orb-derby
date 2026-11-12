@@ -10,6 +10,7 @@ import { startPartyHost } from './party/host';
 import { createMusic } from './audio';
 import { createConfetti } from './confetti';
 import { track } from './analytics';
+import { t } from './i18n';
 import type { EntryMode, PartyHost } from './types';
 import { MARBLE_RADIUS, type Marble, type Phase, type RaceSnapshot, type WinMode } from './types';
 
@@ -324,7 +325,7 @@ let entryMode: EntryMode = 'manual';
 function openParty() {
   if (party || partyOpening) return;
   partyOpening = startPartyHost(
-    (name) => ui.addParticipant?.(name) ?? { ok: false, reason: '진행자 화면이 참가를 받을 수 없습니다' },
+    (name) => ui.addParticipant?.(name) ?? { ok: false, reason: 'host.cantReceive' },
     (st, msg) => ui.setJoinInfo?.(party?.info ?? null, st, msg),
   )
     .then((h) => {
@@ -334,7 +335,7 @@ function openParty() {
     })
     .catch((e) => {
       console.warn('[party]', e);
-      ui.setJoinInfo?.(null, 'error', 'QR 방을 열지 못했어요. 잠시 뒤 다시 시도하세요');
+      ui.setJoinInfo?.(null, 'error', t('qr.roomFail'));
     })
     .finally(() => (partyOpening = null));
 }
@@ -453,7 +454,7 @@ renderer.setAnimationLoop((now) => {
     // 카메라가 따라가는 구슬은 멀어도 이름을 보이게만 한다(모양은 다른 라벨과 같음)
     lb.visible = isFocus || m.mesh.position.distanceTo(camera.position) < LABEL_FAR;
     lb.element.classList.toggle('done', m.place !== null);
-    const tagText = m.place !== null ? `${m.place}위 완주` : '';
+    const tagText = m.place !== null ? t('label.finished', { n: m.place }) : '';
     const tagEl = lb.element.lastElementChild as HTMLElement;
     if (tagEl.textContent !== tagText) tagEl.textContent = tagText;
   }

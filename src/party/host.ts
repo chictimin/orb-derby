@@ -32,7 +32,8 @@ export const startPartyHost: StartPartyHost = async (onJoin, onStatus) => {
     }
   }
   if (!peer) {
-    const msg = `참가 서버에 연결하지 못했습니다(${(lastErr as { type?: string })?.type ?? '알 수 없음'})`;
+    const msg = 'party.connectFail';
+    console.warn('[party]', (lastErr as { type?: string })?.type ?? 'unknown');
     onStatus('error', msg);
     throw lastErr instanceof Error ? lastErr : new Error(msg);
   }
@@ -47,14 +48,14 @@ export const startPartyHost: StartPartyHost = async (onJoin, onStatus) => {
   };
   const handle = (conn: DataConnection, data: unknown) => {
     const m = data as Partial<JoinMsg> | null;
-    if (!m || typeof m !== 'object' || m.type !== 'join') return reply(conn, { type: 'joined', ok: false, reason: '잘못된 요청입니다' });
+    if (!m || typeof m !== 'object' || m.type !== 'join') return reply(conn, { type: 'joined', ok: false, reason: 'host.badRequest' });
     const name = cleanName(m.name);
-    if (!name) return reply(conn, { type: 'joined', ok: false, reason: '이름은 1~20자로 입력해 주세요' });
+    if (!name) return reply(conn, { type: 'joined', ok: false, reason: 'host.badName' });
     let r: { ok: boolean; reason?: string };
     try {
       r = onJoin(name);
     } catch {
-      r = { ok: false, reason: '진행자 화면에서 처리하지 못했습니다' };
+      r = { ok: false, reason: 'host.failed' };
     }
     reply(conn, { type: 'joined', ok: r.ok, reason: r.reason });
   };
@@ -65,14 +66,14 @@ export const startPartyHost: StartPartyHost = async (onJoin, onStatus) => {
   });
   p.on('disconnected', () => {
     if (p.destroyed) return;
-    onStatus('connecting', '참가 서버 재연결 중');
+    onStatus('connecting', 'party.reconnecting');
     p.reconnect();
   });
   p.on('open', () => onStatus('ready'));
   p.on('error', (e) => {
     const t = (e as { type?: string }).type;
     // 개별 참가자 쪽 오류(peer-unavailable 등)는 방 전체 오류가 아니다
-    if (t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') onStatus('connecting', '참가 서버 재연결 중');
+    if (t === 'network' || t === 'server-error' || t === 'socket-error' || t === 'socket-closed') onStatus('connecting', 'party.reconnecting');
     else console.warn('[party]', e);
   });
 

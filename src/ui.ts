@@ -1,9 +1,9 @@
 // 워커 B: 파티 게임풍 한국어 UI (파스텔·둥근 모서리·두꺼운 글자).
 // 이름은 전부 textContent로 넣어 HTML 주입을 방지한다. CSS는 <style>로 주입.
+import { getLang, onLangChange, setLang, t, type Lang } from './i18n';
 import type { AudioState, CreateUI, EntryMode, JoinInfo, Marble, PartyStatus, RaceSnapshot, WinMode } from './types';
 
 const LS_KEY = 'orb-derby:names';
-const DEFAULT_NAMES = ['철수', '영희', '민수', '지영', '태호', '수진'];
 const HUD_N = 8;
 const HUD_THROTTLE_MS = 150;
 const MAX_NAMES = 40;
@@ -49,6 +49,10 @@ const CSS = `
 .odb-avexpand{display:none;border:2px solid #e5ddff;background:#fff;color:#6b5c78;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:900;cursor:pointer;white-space:nowrap}
 .odb-lobbyaudio{justify-content:center;margin-top:12px}
 .odb-hudaudio{margin-top:10px}
+.odb-lang{position:absolute;top:12px;right:14px;display:flex;border:2px solid #a8245e;border-radius:999px;overflow:hidden;background:#fff}
+.odb-langbtn{border:none;background:#fff;color:#a8245e;font-size:12px;font-weight:900;padding:4px 10px;cursor:pointer;letter-spacing:.5px;line-height:1.2}
+.odb-langbtn[aria-pressed=true]{background:#a8245e;color:#fff}
+.odb-lobby .odb-eyebrow{margin-top:14px}
 .odb-credit{font-size:11px;font-weight:700;color:#6b5c78;margin:8px 0 0;text-align:center}
 .odb-credit a{color:#6a4fd8}
 @media (max-width:640px){
@@ -59,7 +63,7 @@ const CSS = `
 .odb-hud{top:12px;left:12px;background:rgba(255,247,251,.94);border:3px solid #ffd1e3;border-radius:20px;padding:12px 14px;width:248px;box-shadow:0 6px 24px rgba(255,143,178,.3)}
 .odb-hudhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .odb-time{font-size:16px;font-weight:900;color:#c23375;font-variant-numeric:tabular-nums}
-.odb-modelabel{font-size:11px;font-weight:900;color:#fff;background:#6a4fd8;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.odb-modelabel{min-width:0;font-size:11px;font-weight:900;color:#fff;background:#6a4fd8;border-radius:999px;padding:3px 10px;white-space:nowrap}
 .odb-board{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:44vh;overflow:auto}
 .odb-row{display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:800;color:#5a4f66;background:#fff;border-radius:12px;padding:4px 9px;border:2px solid transparent;overflow:hidden}
 .odb-row .odb-rank{flex:0 0 auto;min-width:34px;white-space:nowrap;font-variant-numeric:tabular-nums;color:#6b5c78}
@@ -242,6 +246,12 @@ export const createUI: CreateUI = (root) => {
   let audioCb: (s: AudioState) => void = () => {};
   let audioMuted = false;
   let audioVolume = 0.5;
+  // 언어 전환 시 다시 그릴 라벨 함수 목록. bind는 즉시 1회 실행하고 목록에 등록한다.
+  const relabels: (() => void)[] = [];
+  function bind(fn: () => void): void {
+    fn();
+    relabels.push(fn);
+  }
   const audioSyncs: ((s: AudioState) => void)[] = [];
   function syncAudioControls(): void {
     const s = { muted: audioMuted, volume: audioVolume };
@@ -281,16 +291,18 @@ export const createUI: CreateUI = (root) => {
     vol.max = '100';
     vol.step = '1';
     vol.className = 'odb-avol';
-    vol.setAttribute('aria-label', '음악 크기');
+    bind(() => vol.setAttribute('aria-label', t('audio.volume')));
     vol.oninput = () => {
       const v = Number(vol.value) / 100;
       pushAudio({ muted: v <= 0 ? audioMuted : false, volume: v });
     };
     const expand = document.createElement('button');
     expand.className = 'odb-avexpand';
-    expand.textContent = '크기';
     expand.setAttribute('aria-expanded', 'false');
-    expand.setAttribute('aria-label', '음악 크기 조절 펼치기');
+    bind(() => {
+      expand.textContent = t('audio.expandLabel');
+      expand.setAttribute('aria-label', t('audio.expandAria'));
+    });
     expand.onclick = () => {
       const open = box.classList.toggle('open');
       expand.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -301,14 +313,14 @@ export const createUI: CreateUI = (root) => {
     function sync(s: AudioState): void {
       iconOn.style.display = s.muted ? 'none' : '';
       iconOff.style.display = s.muted ? '' : 'none';
-      const label = s.muted ? '음악 켜기 (단축키 M)' : '음악 끄기 (단축키 M)';
+      const label = s.muted ? t('audio.unmute') : t('audio.mute');
       mute.setAttribute('aria-label', label);
       mute.title = label;
       mute.setAttribute('aria-pressed', s.muted ? 'true' : 'false');
       vol.value = String(Math.round(Math.max(0, Math.min(1, s.volume)) * 100));
     }
     audioSyncs.push(sync);
-    sync({ muted: audioMuted, volume: audioVolume });
+    bind(() => sync({ muted: audioMuted, volume: audioVolume }));
     return { el: box, sync };
   }
   let shownFollowing: number | null = null;
@@ -316,13 +328,7 @@ export const createUI: CreateUI = (root) => {
   // 화면에 보이는 현재 배속(키보드 P/Space 일시정지·재개용). renderHud에서 갱신.
   let shownSpeed = 1;
   let lastNonZero = 1;
-  const SPEED_BTNS: { x: number; label: string; aria: string }[] = [
-    { x: 0, label: '일시정지', aria: '일시정지' },
-    { x: 0.5, label: '0.5x', aria: '배속 0.5배' },
-    { x: 1, label: '1x', aria: '배속 1배' },
-    { x: 2, label: '2x', aria: '배속 2배' },
-    { x: 4, label: '4x', aria: '배속 4배' },
-  ];
+  const SPEED_BTNS: { x: number }[] = [{ x: 0 }, { x: 0.5 }, { x: 1 }, { x: 2 }, { x: 4 }];
 
   const lobbyEl = el('div', 'odb-panel odb-lobby', root);
   const countEl = el('div', 'odb-panel odb-count', root);
@@ -336,7 +342,9 @@ export const createUI: CreateUI = (root) => {
   const winAlert = el('div', 'odb-panel odb-winalert', root);
   winAlert.style.display = 'none';
   winAlert.setAttribute('aria-hidden', 'true');
-  winAlert.title = '클릭하면 닫힘';
+  bind(() => {
+    winAlert.title = t('hud.alertTitle');
+  });
   const winAlertSwatch = el('div', 'odb-winalswatch', winAlert);
   const winAlertText = el('p', 'odb-winalertxt', winAlert);
   let winAlertTimer = 0;
@@ -344,9 +352,16 @@ export const createUI: CreateUI = (root) => {
     window.clearTimeout(winAlertTimer);
     winAlert.style.display = 'none';
   }
+  let alertState: { name: string; mode: WinMode } | null = null;
+  function paintWinAlert(): void {
+    if (!alertState) return;
+    winAlertText.textContent = t(alertState.mode === 'first' ? 'alert.first' : 'alert.last', { name: alertState.name });
+  }
+  bind(paintWinAlert);
   function showWinAlert(m: Marble, mode: WinMode): void {
     winAlertSwatch.style.background = m.color;
-    winAlertText.textContent = mode === 'first' ? `${m.name} 우승!` : `${m.name} 꼴등 당첨!`;
+    alertState = { name: m.name, mode };
+    paintWinAlert();
     winAlert.style.display = '';
     window.clearTimeout(winAlertTimer);
     winAlertTimer = window.setTimeout(hideWinAlert, 3000);
@@ -385,22 +400,51 @@ export const createUI: CreateUI = (root) => {
 
   // ── 로비 ──
   // index.html은 PM 소유라 직접 고치지 않고 런타임에 문서 제목을 지정한다
-  document.title = 'Orb Derby — 구슬 경주 추첨기';
+  bind(() => {
+    document.title = t('doc.title');
+  });
+  // 언어 토글 [KO | EN]
+  const langBox = el('div', 'odb-lang', lobbyEl);
+  langBox.setAttribute('role', 'group');
+  const langBtns: [Lang, HTMLButtonElement][] = (['ko', 'en'] as Lang[]).map((l) => {
+    const b = document.createElement('button');
+    b.className = 'odb-langbtn';
+    b.type = 'button';
+    b.lang = l;
+    b.textContent = l.toUpperCase();
+    b.onclick = () => setLang(l);
+    langBox.appendChild(b);
+    return [l, b];
+  });
+  bind(() => {
+    langBox.setAttribute('aria-label', t('lang.label'));
+    for (const [l, b] of langBtns) {
+      b.setAttribute('aria-pressed', getLang() === l ? 'true' : 'false');
+      b.setAttribute('aria-label', t('lang.' + l));
+    }
+  });
   const eyebrow = el('p', 'odb-eyebrow', lobbyEl);
-  eyebrow.textContent = '구슬 경주 추첨기';
+  bind(() => {
+    eyebrow.textContent = t('lobby.eyebrow');
+  });
   const headline = el('h1', 'odb-headline', lobbyEl);
   headline.textContent = 'ORB DERBY';
   const sub = el('p', 'odb-sub', lobbyEl);
-  sub.textContent = '이름을 넣고 누가 뽑힐지 굴려보세요';
+  bind(() => {
+    sub.textContent = t('lobby.sub');
+  });
 
   const nameLabel = el('label', 'odb-label', lobbyEl) as HTMLLabelElement;
-  nameLabel.textContent = '참가자 이름 (줄바꿈 또는 쉼표로 구분, 2~40명)';
+  bind(() => {
+    nameLabel.textContent = t('lobby.namesLabel');
+  });
   const area = document.createElement('textarea');
   area.className = 'odb-names';
   nameLabel.htmlFor = 'odb-names';
   area.id = 'odb-names';
   const saved = loadSaved();
-  area.value = saved || DEFAULT_NAMES.join('\n');
+  let curDefault = t('lobby.defaultNames');
+  area.value = saved || curDefault;
   lobbyEl.appendChild(area);
 
   const modes = el('div', 'odb-firstwin', lobbyEl);
@@ -416,13 +460,17 @@ export const createUI: CreateUI = (root) => {
   fwTrack.setAttribute('aria-hidden', 'true');
   const fwText = document.createElement('span');
   fwText.className = 'odb-fwtext';
-  fwText.textContent = '선착순 우승';
+  bind(() => {
+    fwText.textContent = t('mode.first');
+  });
   fwRow.appendChild(fwCheck);
   fwRow.appendChild(fwTrack);
   fwRow.appendChild(fwText);
   const fwSub = document.createElement('p');
   fwSub.className = 'odb-fwsub';
-  fwSub.textContent = '꼴등 당첨';
+  bind(() => {
+    fwSub.textContent = t('mode.last');
+  });
   modes.appendChild(fwRow);
   modes.appendChild(fwSub);
   const refreshFwSub = () => {
@@ -435,17 +483,22 @@ export const createUI: CreateUI = (root) => {
   const err = el('p', 'odb-err', lobbyEl);
   const refreshCount = () => {
     const n = parseNames(area.value).length;
-    countLine.textContent = `현재 ${n}명`;
+    countLine.textContent = t('lobby.count', { n });
   };
   area.addEventListener('input', () => {
     err.textContent = '';
     refreshCount();
   });
-  refreshCount();
+  bind(refreshCount);
+  bind(() => {
+    if (err.textContent) err.textContent = t('lobby.minError');
+  });
 
   const startBtn = document.createElement('button');
   startBtn.className = 'odb-start';
-  startBtn.textContent = '경주 시작';
+  bind(() => {
+    startBtn.textContent = t('lobby.start');
+  });
   lobbyEl.appendChild(startBtn);
 
   let startCb: (names: string[], mode: WinMode) => void = () => {};
@@ -463,11 +516,12 @@ export const createUI: CreateUI = (root) => {
     }
     const names = parseNames(area.value);
     if (names.length < 2) {
-      err.textContent = '참가자를 2명 이상 입력해 주세요.';
+      err.textContent = t('lobby.minError');
       return;
     }
     const use = names.slice(0, MAX_NAMES);
-    saveNames(use);
+    // 기본 명단 그대로면 저장하지 않아 다음에도 언어를 따라가게 한다
+    saveNames(use.join('\n') === t('lobby.defaultNames') ? [] : use);
     startCb(use, mode);
   };
 
@@ -478,33 +532,43 @@ export const createUI: CreateUI = (root) => {
   const qrBody = el('div', 'odb-qrbody', qrEl);
   const qrImg = document.createElement('img');
   qrImg.className = 'odb-qrimg';
-  qrImg.alt = '참가 QR 코드';
+  bind(() => {
+    qrImg.alt = t('qr.alt');
+  });
   qrBody.appendChild(qrImg);
   const qrGuide = el('div', 'odb-qrguide', qrBody);
-  qrGuide.textContent = '휴대폰으로 찍어서 참가';
+  bind(() => {
+    qrGuide.textContent = t('qr.guide');
+  });
   const qrCode = el('div', 'odb-qrcode', qrBody);
   const qrUrl = el('div', 'odb-qrurl', qrBody);
   const copyBtn = document.createElement('button');
   copyBtn.className = 'odb-qrcopy';
-  copyBtn.textContent = '주소 복사';
+  let copyKey = 'qr.copy';
+  bind(() => {
+    copyBtn.textContent = t(copyKey);
+  });
   copyBtn.onclick = () => {
-    const t = qrUrl.textContent ?? '';
+    const txt = qrUrl.textContent ?? '';
     (async () => {
       try {
-        await navigator.clipboard.writeText(t);
-        copyBtn.textContent = '복사됨';
+        await navigator.clipboard.writeText(txt);
+        copyKey = 'qr.copied';
       } catch {
-        copyBtn.textContent = '복사 실패';
+        copyKey = 'qr.copyFail';
       }
+      copyBtn.textContent = t(copyKey);
       window.setTimeout(() => {
-        copyBtn.textContent = '주소 복사';
+        copyKey = 'qr.copy';
+        copyBtn.textContent = t(copyKey);
       }, 1500);
     })();
   };
   qrBody.appendChild(copyBtn);
   const qrWarn = el('div', 'odb-qrwarn', qrEl);
-  qrWarn.textContent =
-    '이 주소(localhost)는 휴대폰에서 열 수 없어요. 터미널의 Network 주소나 배포 주소로 여세요';
+  bind(() => {
+    qrWarn.textContent = t('qr.warn');
+  });
   qrWarn.style.display = 'none';
 
   // ── 참가 방식 탭 [직접 입력 | QR 참가] ──
@@ -515,17 +579,21 @@ export const createUI: CreateUI = (root) => {
   const tabsEl = document.createElement('div');
   tabsEl.className = 'odb-tabs';
   tabsEl.setAttribute('role', 'tablist');
-  tabsEl.setAttribute('aria-label', '참가 방식');
+  bind(() => tabsEl.setAttribute('aria-label', t('tabs.label')));
   const tabManual = document.createElement('button');
   tabManual.className = 'odb-tab';
   tabManual.setAttribute('role', 'tab');
   tabManual.setAttribute('aria-controls', 'odb-panel-manual');
-  tabManual.textContent = '직접 입력';
+  bind(() => {
+    tabManual.textContent = t('tabs.manual');
+  });
   const tabQr = document.createElement('button');
   tabQr.className = 'odb-tab';
   tabQr.setAttribute('role', 'tab');
   tabQr.setAttribute('aria-controls', 'odb-panel-qr');
-  tabQr.textContent = 'QR 참가';
+  bind(() => {
+    tabQr.textContent = t('tabs.qr');
+  });
   tabsEl.appendChild(tabManual);
   tabsEl.appendChild(tabQr);
   lobbyEl.insertBefore(tabsEl, nameLabel);
@@ -533,7 +601,7 @@ export const createUI: CreateUI = (root) => {
   const manualPanel = document.createElement('div');
   manualPanel.id = 'odb-panel-manual';
   manualPanel.setAttribute('role', 'tabpanel');
-  manualPanel.setAttribute('aria-label', '직접 입력');
+  bind(() => manualPanel.setAttribute('aria-label', t('tabs.manual')));
   lobbyEl.insertBefore(manualPanel, nameLabel);
   manualPanel.appendChild(nameLabel);
   manualPanel.appendChild(area);
@@ -543,19 +611,25 @@ export const createUI: CreateUI = (root) => {
   const qrPanel = document.createElement('div');
   qrPanel.id = 'odb-panel-qr';
   qrPanel.setAttribute('role', 'tabpanel');
-  qrPanel.setAttribute('aria-label', 'QR 참가');
+  bind(() => qrPanel.setAttribute('aria-label', t('tabs.qr')));
   lobbyEl.insertBefore(qrPanel, modes);
   qrPanel.appendChild(qrEl);
   const qrRosterLabel = el('div', 'odb-label', qrPanel);
-  qrRosterLabel.textContent = 'QR로 들어온 참가자';
+  bind(() => {
+    qrRosterLabel.textContent = t('qr.rosterLabel');
+  });
   const qrCount = el('p', 'odb-qrcount', qrPanel);
   const qrChips = el('div', 'odb-chips', qrPanel);
   const qrClear = document.createElement('button');
   qrClear.className = 'odb-qrclear';
-  qrClear.textContent = '전체 비우기';
+  bind(() => {
+    qrClear.textContent = t('qr.clear');
+  });
   qrPanel.appendChild(qrClear);
   const qrHint = el('p', 'odb-qrhint', qrPanel);
-  qrHint.textContent = 'QR 참가자를 2명 이상 모아 주세요';
+  bind(() => {
+    qrHint.textContent = t('qr.hint');
+  });
 
   function refreshStartState(): void {
     if (entryMode === 'qr') {
@@ -572,22 +646,22 @@ export const createUI: CreateUI = (root) => {
     qrNames.forEach((n, idx) => {
       const chip = document.createElement('span');
       chip.className = 'odb-chip';
-      const t = document.createElement('span');
-      t.textContent = n;
+      const lab = document.createElement('span');
+      lab.textContent = n;
       const x = document.createElement('button');
       x.className = 'odb-chipx';
       x.textContent = '×';
-      x.setAttribute('aria-label', `${n} 빼기`);
+      x.setAttribute('aria-label', t('qr.remove', { name: n }));
       x.onclick = () => {
         qrNames.splice(idx, 1);
         saveQrNames(qrNames);
         renderQrRoster();
       };
-      chip.appendChild(t);
+      chip.appendChild(lab);
       chip.appendChild(x);
       qrChips.appendChild(chip);
     });
-    qrCount.textContent = `현재 ${qrNames.length}명`;
+    qrCount.textContent = t('lobby.count', { n: qrNames.length });
     refreshStartState();
   }
 
@@ -609,19 +683,19 @@ export const createUI: CreateUI = (root) => {
     qrEl.style.display = '';
     if (j.status === 'connecting') {
       qrStatus.style.display = '';
-      qrStatus.textContent = '연결 중…';
+      qrStatus.textContent = t('qr.connecting');
       qrBody.style.display = 'none';
       qrWarn.style.display = 'none';
     } else if (j.status === 'error') {
       qrStatus.style.display = '';
-      qrStatus.textContent = j.msg || '연결에 실패했어요';
+      qrStatus.textContent = j.msg ? t(j.msg) : t('qr.failed');
       qrBody.style.display = 'none';
       qrWarn.style.display = 'none';
     } else if (j.info) {
       qrStatus.style.display = 'none';
       qrBody.style.display = '';
       qrImg.src = j.info.qrDataUrl;
-      qrCode.textContent = `방 코드 ${j.info.roomId.slice(-6)}`;
+      qrCode.textContent = t('qr.roomCode', { code: j.info.roomId.slice(-6) });
       qrUrl.textContent = j.info.url;
       qrWarn.style.display = j.info.unreachable ? '' : 'none';
     } else {
@@ -629,6 +703,9 @@ export const createUI: CreateUI = (root) => {
       qrWarn.style.display = 'none';
     }
   }
+
+  bind(renderQrRoster);
+  bind(renderJoin);
 
   function paintTab(): void {
     const isManual = entryMode === 'manual';
@@ -669,7 +746,11 @@ export const createUI: CreateUI = (root) => {
   lobbyAudio.el.classList.add('odb-lobbyaudio');
   lobbyEl.appendChild(lobbyAudio.el);
   const credit = el('div', 'odb-credit', lobbyEl);
-  credit.textContent = '음악: MintoDog (CC0) ';
+  const creditText = document.createTextNode('');
+  credit.appendChild(creditText);
+  bind(() => {
+    creditText.data = t('audio.credit');
+  });
   const creditLink = document.createElement('a');
   creditLink.href = 'audio/CREDITS.md';
   creditLink.target = '_blank';
@@ -717,6 +798,7 @@ export const createUI: CreateUI = (root) => {
     board.appendChild(li);
     rowEls.push(li);
   }
+  let lastHudArgs: { snap: RaceSnapshot; manual: boolean; speed: number; following: number | null } | null = null;
   const camBtn = document.createElement('button');
   camBtn.className = 'odb-cambtn';
   camBtn.onclick = () => toggleCb();
@@ -726,13 +808,18 @@ export const createUI: CreateUI = (root) => {
   const speedBtns: HTMLButtonElement[] = SPEED_BTNS.map((s) => {
     const b = document.createElement('button');
     b.className = s.x === 0 ? 'odb-speed odb-speed-pause' : 'odb-speed';
-    b.textContent = s.label;
-    b.setAttribute('aria-label', s.aria);
     b.setAttribute('aria-pressed', 'false');
     b.onclick = () => speedCb(s.x);
     speedsBox.appendChild(b);
     return b;
   });
+  bind(() =>
+    speedBtns.forEach((b, i) => {
+      const x = SPEED_BTNS[i].x;
+      b.textContent = x === 0 ? t('hud.pause') : `${x}x`;
+      b.setAttribute('aria-label', x === 0 ? t('hud.pauseAria') : t('hud.speedAria', { x }));
+    }),
+  );
 
   // 키보드 1~4 배속 전환, P/Space 일시정지·재개. 입력란 타이핑 중이거나 HUD가 닫혀 있으면 무시.
   // 포커스가 버튼 위일 때 Space는 네이티브 버튼 동작에 맡긴다.
@@ -802,17 +889,17 @@ export const createUI: CreateUI = (root) => {
 
   let lastHudAt = 0;
   function renderRowTags(btn: HTMLElement, m: Marble, snap: RaceSnapshot): void {
-    btn.querySelectorAll('.odb-tag').forEach((t) => t.remove());
+    btn.querySelectorAll('.odb-tag').forEach((x) => x.remove());
     const isWinner = snap.winner !== null && m.id === snap.winner.id;
     if (isWinner) {
       const tag = document.createElement('span');
       tag.className = 'odb-tag odb-tag-focus';
-      tag.textContent = '당첨';
+      tag.textContent = t('tag.picked');
       btn.appendChild(tag);
     } else if (m.place !== null) {
       const tag = document.createElement('span');
       tag.className = 'odb-tag odb-tag-done';
-      tag.textContent = '완주';
+      tag.textContent = t('tag.done');
       btn.appendChild(tag);
     }
     // 당첨 확정 구슬에는 유력 태그를 붙이지 않는다
@@ -820,7 +907,7 @@ export const createUI: CreateUI = (root) => {
     if (!isWinner && snap.focus !== null && m.id === snap.focus.id) {
       const tag = document.createElement('span');
       tag.className = 'odb-tag odb-tag-focus';
-      tag.textContent = snap.mode === 'first' ? '우승 유력' : '꼴등 유력';
+      tag.textContent = t(snap.mode === 'first' ? 'tag.likelyFirst' : 'tag.likelyLast');
       btn.appendChild(tag);
     }
   }
@@ -836,13 +923,11 @@ export const createUI: CreateUI = (root) => {
       n++;
       const isWinner = snap.winner !== null && m.id === snap.winner.id;
       const st = isWinner
-        ? '당첨'
+        ? t('tag.picked')
         : m.place !== null
-          ? '완주'
+          ? t('tag.done')
           : snap.focus !== null && m.id === snap.focus.id
-            ? snap.mode === 'first'
-              ? '우승 유력'
-              : '꼴등 유력'
+            ? t(snap.mode === 'first' ? 'tag.likelyFirst' : 'tag.likelyLast')
             : '';
       const li = document.createElement('li');
       li.className = 'odb-siderow';
@@ -850,9 +935,9 @@ export const createUI: CreateUI = (root) => {
       const btn = document.createElement('button');
       btn.className = 'odb-siderowbtn';
       btn.setAttribute('aria-pressed', m.id === following ? 'true' : 'false');
-      btn.setAttribute('aria-label', `${m.place ?? i + 1}위 ${m.name}${st ? ` ${st}` : ''} 시점 선택`);
+      btn.setAttribute('aria-label', t('sideAria', { n: m.place ?? i + 1, name: m.name, st }));
       const rank = document.createElement('span');
-      rank.textContent = `${m.place ?? i + 1}위`;
+      rank.textContent = t('rank', { n: m.place ?? i + 1 });
       const dot = document.createElement('span');
       dot.className = 'odb-sidedot';
       dot.style.background = m.color;
@@ -872,7 +957,7 @@ export const createUI: CreateUI = (root) => {
       li.appendChild(btn);
       sideList.appendChild(li);
     });
-    sideToggle.textContent = `참가자 ${snap.ranked.length}명`;
+    sideToggle.textContent = t('hud.sideToggle', { n: snap.ranked.length });
     // 화면 높이가 모자라면 스크롤 대신 2열로 흐르게
     if (n > 1 && n * SIDE_ROW_H > window.innerHeight - 24) {
       sideList.classList.add('cols2');
@@ -884,9 +969,9 @@ export const createUI: CreateUI = (root) => {
   }
 
   function renderHud(snap: RaceSnapshot, manual: boolean, speed: number, following: number | null): void {
-    timeEl.textContent = `경과 ${snap.t.toFixed(1)}초`;
-    modeEl.textContent = snap.mode === 'first' ? '선착순 우승' : '꼴등 당첨';
-    camBtn.textContent = manual ? '자동 카메라로 보기' : '수동 카메라로 보기';
+    timeEl.textContent = t('hud.elapsed', { s: snap.t.toFixed(1) });
+    modeEl.textContent = t(snap.mode === 'first' ? 'mode.firstShort' : 'mode.lastShort');
+    camBtn.textContent = t(manual ? 'hud.camAuto' : 'hud.camManual');
     shownSpeed = speed;
     if (speed > 0) lastNonZero = speed;
     speedBtns.forEach((b, i) => {
@@ -897,12 +982,11 @@ export const createUI: CreateUI = (root) => {
     // 당첨 확정 배너(레이스는 계속된다)
     if (snap.winner) {
       winBanner.style.display = '';
-      winBanner.textContent =
-        snap.mode === 'first' ? `${snap.winner.name} 당첨!` : `${snap.winner.name} 꼴등 당첨!`;
+      winBanner.textContent = t(snap.mode === 'first' ? 'hud.banner.first' : 'hud.banner.last', { name: snap.winner.name });
       if (announcedWinnerId !== snap.winner.id) {
         announcedWinnerId = snap.winner.id;
         // aria-live 안내는 여기서 1회만(알림 카드와 중복 안내 금지)
-        announce(snap.mode === 'first' ? `${snap.winner.name} 당첨` : `${snap.winner.name} 꼴등 당첨`);
+        announce(t(snap.mode === 'first' ? 'announce.winFirst' : 'announce.winLast', { name: snap.winner.name }));
         showWinAlert(snap.winner, snap.mode);
       }
     } else {
@@ -913,7 +997,7 @@ export const createUI: CreateUI = (root) => {
       if (m.place !== null && m.place >= 1 && m.place <= 3 && m.finishedAt !== null) {
         if (!announcedPlaces.has(m.place)) {
           announcedPlaces.add(m.place);
-          announce(`${m.place}위 ${m.name} 완주`);
+          announce(t('announce.finish', { n: m.place, name: m.name }));
         }
       }
     }
@@ -923,8 +1007,8 @@ export const createUI: CreateUI = (root) => {
     const followed = following != null ? (snap.ranked.find((m) => m.id === following) ?? null) : null;
     if (followed) {
       followChip.style.display = '';
-      followChip.textContent = `${followed.name} 시점 · 자동으로`;
-      followChip.setAttribute('aria-label', `${followed.name} 시점 고정 해제, 자동 연출로`);
+      followChip.textContent = t('hud.followChip', { name: followed.name });
+      followChip.setAttribute('aria-label', t('hud.followChipAria', { name: followed.name }));
     } else {
       followChip.style.display = 'none';
     }
@@ -940,13 +1024,10 @@ export const createUI: CreateUI = (root) => {
       li.classList.toggle('odb-following', m.id === following);
       const btn = li.children[0] as HTMLButtonElement;
       btn.setAttribute('aria-pressed', m.id === following ? 'true' : 'false');
-      btn.setAttribute(
-        'aria-label',
-        `${m.place ?? i + 1}위 ${m.name}${m.place !== null ? ' 완주' : ''} 시점 선택`,
-      );
+      btn.setAttribute('aria-label', t('rowAria', { n: m.place ?? i + 1, name: m.name, done: m.place !== null ? 1 : 0 }));
       btn.onclick = () => followCb(m.id === following ? null : m.id);
       const rank = btn.children[0] as HTMLElement;
-      rank.textContent = `${m.place ?? i + 1}위`;
+      rank.textContent = t('rank', { n: m.place ?? i + 1 });
       const dot = btn.children[1] as HTMLElement;
       dot.style.background = m.color;
       const nm = btn.children[2] as HTMLElement;
@@ -968,13 +1049,76 @@ export const createUI: CreateUI = (root) => {
   resultEl.appendChild(rList);
   const restartBtn = document.createElement('button');
   restartBtn.className = 'odb-restart';
-  restartBtn.textContent = '다시 하기';
+  bind(() => {
+    restartBtn.textContent = t('result.restart');
+  });
   resultEl.appendChild(restartBtn);
   let restartCb: () => void = () => {};
   restartBtn.onclick = () => restartCb();
 
+  let lastResult: { winner: Marble; ranked: Marble[]; mode: WinMode } | null = null;
+  function paintResult(winner: Marble, ranked: Marble[], mode: WinMode): void {
+    rLabel.textContent = t(mode === 'first' ? 'mode.first' : 'mode.last');
+    winnerEl.textContent = winner.name;
+    // 글자는 진한색 고정, 구슬 색은 스와치+밑줄 장식으로만(대비 확보)
+    winSwatch.style.background = winner.color;
+    winnerEl.style.textDecorationColor = winner.color;
+    rSub.textContent = t(mode === 'first' ? 'result.subFirst' : 'result.subLast');
+    rList.replaceChildren();
+    ranked.forEach((m, i) => {
+      const li = document.createElement('li');
+      li.className = 'odb-row';
+      const rank = document.createElement('span');
+      rank.className = 'odb-rank';
+      rank.textContent = t('rank', { n: m.place ?? i + 1 });
+      const dot = document.createElement('span');
+      dot.className = 'odb-dot';
+      dot.style.background = m.color;
+      dot.setAttribute('aria-hidden', 'true');
+      const nm = document.createElement('span');
+      nm.className = 'odb-name';
+      nm.textContent = m.name;
+      li.appendChild(rank);
+      li.appendChild(dot);
+      li.appendChild(nm);
+      const rec = document.createElement('span');
+      rec.className = 'odb-rectime';
+      if (m.finishedAt !== null) rec.textContent = t('result.time', { s: m.finishedAt.toFixed(1) });
+      else if (m.id === winner.id && mode === 'last') rec.textContent = t('result.lastConfirmed');
+      else rec.textContent = '—';
+      li.appendChild(rec);
+      if (m.id === winner.id) {
+        const tag = document.createElement('span');
+        tag.className = 'odb-tag odb-tag-focus';
+        tag.textContent = t('tag.picked');
+        li.appendChild(tag);
+      } else if (m.place !== null) {
+        const tag = document.createElement('span');
+        tag.className = 'odb-tag odb-tag-done';
+        tag.textContent = t('tag.done');
+        li.appendChild(tag);
+      }
+      rList.appendChild(li);
+    });
+  }
+
   hideAll();
   lobbyEl.style.display = '';
+
+  // 언어 전환: 기본 명단은 새 언어로 바꾸고(입력한 이름은 그대로), 라벨과 열려 있는 화면을 다시 그린다.
+  onLangChange(() => {
+    const nextDefault = t('lobby.defaultNames');
+    if (area.value.trim() === curDefault.trim()) {
+      area.value = nextDefault;
+      refreshCount();
+    }
+    curDefault = nextDefault;
+    relabels.forEach((f) => f());
+    if (lastHudArgs && hudEl.style.display !== 'none') {
+      renderHud(lastHudArgs.snap, lastHudArgs.manual, lastHudArgs.speed, lastHudArgs.following);
+    }
+    if (lastResult && resultEl.style.display !== 'none') paintResult(lastResult.winner, lastResult.ranked, lastResult.mode);
+  });
 
   return {
     showLobby(onStart) {
@@ -1000,7 +1144,7 @@ export const createUI: CreateUI = (root) => {
       if (n === 3) {
         // 새 레이스 시작: 안내 상태 초기화
         resetAnnounce();
-        announce('경주 시작!');
+        announce(t('announce.start'));
       }
       hideAll();
       countEl.style.display = '';
@@ -1027,6 +1171,7 @@ export const createUI: CreateUI = (root) => {
       hudEl.style.display = '';
       sideEl.style.display = '';
       lastSnap = snap;
+      lastHudArgs = { snap, manual, speed, following };
       renderHud(snap, manual, speed, following);
     },
     showResult(winner: Marble, ranked: Marble[], mode: WinMode, onRestart: () => void) {
@@ -1034,50 +1179,9 @@ export const createUI: CreateUI = (root) => {
       hideWinAlert();
       hideAll();
       resultEl.style.display = '';
-      announce(`결과 발표. ${winner.name} ${mode === 'first' ? '당첨' : '꼴등 당첨'}`);
-      rLabel.textContent = mode === 'first' ? '선착순 우승' : '꼴등 당첨';
-      winnerEl.textContent = winner.name;
-      // 글자는 진한색 고정, 구슬 색은 스와치+밑줄 장식으로만(대비 확보)
-      winSwatch.style.background = winner.color;
-      winnerEl.style.textDecorationColor = winner.color;
-      rSub.textContent =
-        mode === 'first' ? '가장 먼저 들어온 구슬이 당첨!' : '가장 늦게 들어온 구슬이 당첨!';
-      rList.replaceChildren();
-      ranked.forEach((m, i) => {
-        const li = document.createElement('li');
-        li.className = 'odb-row';
-        const rank = document.createElement('span');
-        rank.className = 'odb-rank';
-        rank.textContent = `${m.place ?? i + 1}위`;
-        const dot = document.createElement('span');
-        dot.className = 'odb-dot';
-        dot.style.background = m.color;
-        dot.setAttribute('aria-hidden', 'true');
-        const nm = document.createElement('span');
-        nm.className = 'odb-name';
-        nm.textContent = m.name;
-        li.appendChild(rank);
-        li.appendChild(dot);
-        li.appendChild(nm);
-        const rec = document.createElement('span');
-        rec.className = 'odb-rectime';
-        if (m.finishedAt !== null) rec.textContent = `${m.finishedAt.toFixed(1)}초`;
-        else if (m.id === winner.id && mode === 'last') rec.textContent = '꼴등 확정';
-        else rec.textContent = '—';
-        li.appendChild(rec);
-        if (m.id === winner.id) {
-          const tag = document.createElement('span');
-          tag.className = 'odb-tag odb-tag-focus';
-          tag.textContent = '당첨';
-          li.appendChild(tag);
-        } else if (m.place !== null) {
-          const tag = document.createElement('span');
-          tag.className = 'odb-tag odb-tag-done';
-          tag.textContent = '완주';
-          li.appendChild(tag);
-        }
-        rList.appendChild(li);
-      });
+      announce(t(mode === 'first' ? 'announce.resultFirst' : 'announce.resultLast', { name: winner.name }));
+      lastResult = { winner, ranked, mode };
+      paintResult(winner, ranked, mode);
     },
     onToggleManual(cb) {
       toggleCb = cb;
@@ -1091,18 +1195,18 @@ export const createUI: CreateUI = (root) => {
     addParticipant(name: string) {
       // QR 참가는 항상 QR 명단에 쌓인다(레이스 중 포함, 다음 판 명단)
       const clean = name.trim();
-      if (!clean) return { ok: false, reason: '이름을 입력해 주세요' };
+      if (!clean) return { ok: false, reason: 'reason.empty' };
       const norm = (s: string) => s.trim().toLowerCase();
       if (qrNames.some((n) => norm(n) === norm(clean))) {
-        return { ok: false, reason: '이미 있는 이름이에요' };
+        return { ok: false, reason: 'reason.dup' };
       }
       if (qrNames.length >= MAX_NAMES) {
-        return { ok: false, reason: '정원이 찼어요' };
+        return { ok: false, reason: 'reason.full' };
       }
       qrNames.push(clean);
       saveQrNames(qrNames);
       renderQrRoster();
-      showToast(`${clean} 님 참가`);
+      showToast(t('toast.joined', { name: clean }));
       return { ok: true };
     },
     setJoinInfo(info: JoinInfo | null, status: PartyStatus, msg?: string) {

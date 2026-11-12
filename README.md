@@ -1,96 +1,102 @@
-# ORB DERBY — 구슬 경주 추첨기
+# ORB DERBY — Marble Race Picker
 
-이름을 넣으면 사람마다 구슬이 하나씩 생기고, 3D 장애물 탑을 굴러 내려가 순위가 정해지는 추첨기입니다.
+**English** | [한국어](README.ko.md)
 
-**플레이:** https://chictimin.github.io/orb-derby/
+Type in some names and each person gets a marble. The marbles tumble down a 3D obstacle tower, and the finish order picks the winner.
 
-## 이렇게 놀아요
+**Play:** https://chictimin.github.io/orb-derby/ (English or Korean is picked from your browser language. Switch any time with the KO/EN button.)
 
-1. 로비에서 참가자를 넣습니다.
-   - **직접 입력** 탭: 이름을 줄바꿈이나 쉼표로 구분해 2~40명.
-   - **QR 참가** 탭: 화면의 QR을 휴대폰으로 찍고 이름을 보내면 명단에 바로 추가됩니다.
-2. **선착순 우승** 토글을 고릅니다. 켜면 가장 먼저 도착한 구슬이 우승, 끄면 마지막까지 남은 구슬이 꼴등 당첨입니다.
-3. **경주 시작.** 3·2·1 카운트다운 뒤 구슬이 출발 깔때기로 한꺼번에 떨어집니다.
-4. 당첨이 확정되면 화면에 알림이 뜨고, 레이스는 전원이 들어올 때까지 이어집니다. 끝나면 전체 순위가 나옵니다.
+## How to play
 
-## 코스
+1. Add players in the lobby.
+   - **Type names** tab: 2–40 names, separated by new lines or commas.
+   - **QR join** tab: players scan the on-screen QR code with their phone and send their name. It shows up in the list right away.
+2. Choose the mode with the **First to finish wins** toggle. When it is on, the first marble to finish wins. When it is off, the last marble still on the course is picked.
+3. Press **Start**. After a 3-2-1 countdown, every marble drops into the starting funnel at once.
+4. A notice pops up the moment a winner is decided. The race keeps going until everyone finishes, then the full ranking is shown.
 
-위에서 아래로 쌓인 탑 구조입니다. 구간 사이는 자유낙하로 이어집니다.
+## The course
 
-| 순서 | 구간 | 볼거리 |
+The course is a tower built from top to bottom. Marbles free-fall from one section into the next.
+
+| # | Section | What happens |
 |---|---|---|
-| 1 | 출발 깔때기 | 다 같이 떨어져 1차 경쟁, 회전 교반 막대 |
-| 2 | 직각 채널 | 지그재그 채널, 회전 쓸개 바, 주기적으로 열리는 함정문(아래 단으로 지름길) |
-| 3 | 파이프 | 필터 깔때기에서 갈라지는 반투명 나선 파이프와 지름길 슈트 |
-| 4 | 시소 | 흔들리는 시소와 왕복 푸셔 |
-| 5 | 핀볼 | 범퍼·핀 격자, 결승 쪽으로 바로 떨어지는 행운 구멍 |
-| 6 | 결승 | 회전 원판과 결승 아치 |
+| 1 | Starting funnel | Everyone drops in together. A spinning stirrer mixes up the order |
+| 2 | Square channel | Zigzag channel with a rotating sweeper bar and a trapdoor that opens on a timer (a shortcut to the level below) |
+| 3 | Pipe | A filter funnel splits marbles between a translucent spiral pipe and a shortcut chute |
+| 4 | Seesaw | Tilting seesaw and a back-and-forth pusher |
+| 5 | Pinball | Bumpers, a pin grid, and lucky holes that drop straight toward the finish |
+| 6 | Finale | A spinning turntable and the finish arch |
 
-트랙 밖으로 떨어지면 떨어지기 직전 자리의 트랙 한가운데로 돌아가고, 3초 이상 끼이면 지나온 체크포인트로 돌아갑니다. 시간 제한은 없습니다.
+A marble that falls off the track goes back to the middle of the track, about a second before where it fell. A marble stuck for more than 3 seconds goes back to the last checkpoint it passed. There is no time limit.
 
-## 조작
+## Controls
 
-| 기능 | 방법 |
+| Action | How |
 |---|---|
-| 배속·일시정지 | HUD 버튼, 키보드 1~4 / P 또는 Space |
-| 참가자 시점 | 리더보드나 오른쪽 참가자 목록에서 이름 클릭(다시 누르면 자동 연출) |
-| 수동 카메라 | "수동 카메라로 보기" 후 드래그로 회전·확대 |
-| 음악 | 음소거 버튼 또는 M, 볼륨 슬라이더 |
-| 고화질 | 주소 뒤에 `?quality=high` |
+| Speed / pause | HUD buttons, keys 1–4 / P or Space |
+| Follow a player | Click a name in the leaderboard or the player list on the right. Click again to go back to the automatic camera |
+| Free camera | "Free camera", then drag to rotate and zoom |
+| Music | Mute button or M, volume slider |
+| High quality | Add `?quality=high` to the URL |
+| Language | KO/EN button, or `?lang=en` / `?lang=ko` |
 
-## 접근성
+## Accessibility
 
-- 글자 대비는 WCAG AA(일반 4.5:1, 큰 글자 3:1)를 맞췄습니다.
-- 리더보드는 목록 구조이고, 시작·당첨·상위 완주·결과는 스크린리더에 안내됩니다. 움직이는 구슬 이름표는 스크린리더에서 숨깁니다.
-- 일시정지가 있고, 운영체제의 '동작 줄이기'를 켜면 카메라 선회와 색종이 효과가 꺼집니다.
-- 음악은 첫 클릭이나 키 입력 전에는 재생되지 않습니다.
+- Text contrast meets WCAG AA (4.5:1 for normal text, 3:1 for large text).
+- The leaderboard is a real list. Race start, the winner, top-3 finishes, and results are announced to screen readers. The floating marble labels are hidden from screen readers.
+- You can pause the race. If your system has "reduce motion" turned on, the camera orbit and confetti are turned off.
+- Music does not play until your first click or key press.
 
-## QR 참가(P2P)
+## QR join (peer-to-peer)
 
-참가자 휴대폰과 진행자 화면은 [PeerJS](https://peerjs.com/) 공개 서버를 거쳐 WebRTC로 연결됩니다. 이름은 브라우저끼리 직접 오가고, 공개 서버는 연결 중개만 합니다. 사내망이나 일부 공용 Wi-Fi에서는 WebRTC가 막혀 참가가 안 될 수 있습니다. 그때는 직접 입력 탭을 쓰세요.
+The players' phones connect to the host screen over WebRTC, through the public [PeerJS](https://peerjs.com/) server. Names travel directly between browsers, and the public server only helps set up the connection. Some office networks and public Wi-Fi block WebRTC. If joining fails there, use the Type names tab.
 
-## 개발
+## Development
 
 ```bash
 npm install
-npm run dev        # http://localhost:5317 (같은 Wi-Fi의 휴대폰은 Network 주소로)
-npm run build      # 타입체크 + 빌드(dist/)
+npm run dev        # http://localhost:5317 (phones on the same Wi-Fi use the Network URL)
+npm run build      # type check + build (dist/)
 ```
 
-`main`에 푸시하면 GitHub Actions가 GitHub Pages로 자동 배포합니다.
+Every push to `main` is deployed to GitHub Pages by GitHub Actions.
 
-헤드리스 시뮬레이터로 코스를 브라우저 없이 검증할 수 있습니다.
+A headless simulator checks the course without a browser.
 
 ```bash
-npx tsx scripts/sim.ts --n 20 --runs 3 --seed 1 --timeout 400          # 탑 전체
-npx tsx scripts/sim.ts --sections pipe --n 20 --runs 3 --timeout 60    # 구간 하나
-npx tsx scripts/sim.ts ... --why                                       # 낙하·끼임 위치 출력
+npx tsx scripts/sim.ts --n 20 --runs 3 --seed 1 --timeout 400          # whole tower
+npx tsx scripts/sim.ts --sections pipe --n 20 --runs 3 --timeout 60    # one section
+npx tsx scripts/sim.ts ... --why                                       # print where marbles fell or got stuck
 ```
 
-출력의 `finished`는 완주 수, `outs`는 트랙 밖 낙하 복귀 수, `kicks`는 끼임 복귀 수, `rho`는 초반(5초) 순위와 최종 순위의 상관(낮을수록 역전이 많음)입니다.
+In the output, `finished` is how many marbles finished, `outs` counts falls off the track, `kicks` counts stuck-marble resets, and `rho` is the correlation between the ranking at 5 seconds and the final ranking. A lower `rho` means more comebacks.
 
-### 구조
+### Layout
 
 ```
 src/
-  main.ts            물리 루프, 순위·당첨 판정, 낙하·끼임 복귀, 이름표
-  types.ts           모듈 간 계약
+  main.ts            physics loop, ranking and winner logic, fall/stuck resets, name labels
+  types.ts           contracts between modules
+  i18n.ts            language detection, KO/EN switch, t()
+  i18n-dict.ts       Korean and English strings
   course/
-    assemble.ts      구간을 탑으로 쌓고 진행도·결승 판정
-    kit.ts           구간 제작 헬퍼(매끈한 경사로·깔때기·리본 벽 등)
-    sections/*.ts    구간 하나 = 파일 하나(자동 수집)
-  camera.ts          자동 중계 카메라
-  ui.ts              로비·HUD·결과 화면
-  party/             QR 참가(PeerJS)
-  audio.ts           배경음악
-scripts/sim.ts       헤드리스 시뮬레이터
+    assemble.ts      stacks the sections into a tower, progress and finish checks
+    kit.ts           section-building helpers (smooth ramps, funnels, ribbon walls)
+    sections/*.ts    one file per section (collected automatically)
+  camera.ts          automatic broadcast-style camera
+  ui.ts              lobby, HUD, results
+  party/             QR join (PeerJS)
+  audio.ts           background music
+  analytics.ts       Google Tag Manager / GA4 (production only, no player names)
+scripts/sim.ts       headless simulator
 ```
 
-기술: TypeScript, [Three.js](https://threejs.org/), [Rapier](https://rapier.rs/)(물리), Vite.
+Built with TypeScript, [Three.js](https://threejs.org/), [Rapier](https://rapier.rs/) (physics), and Vite.
 
-## 크레딧
+## Credits
 
-배경음악은 모두 MintoDog의 CC0 곡입니다. 자세한 출처는 [`public/audio/CREDITS.md`](public/audio/CREDITS.md)에 있습니다.
+All music is CC0 by MintoDog. Full details are in [`public/audio/CREDITS.md`](public/audio/CREDITS.md).
 
 - Joyfully — https://opengameart.org/content/joyfully
 - Pure Raceway — https://opengameart.org/content/pure-raceway

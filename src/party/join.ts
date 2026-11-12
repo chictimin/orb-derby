@@ -1,6 +1,7 @@
 // QR 참가 페이지(휴대폰). join.html?room=<roomId>
 import Peer from 'peerjs';
 import type { JoinMsg, JoinReply } from '../types';
+import { getLang, onLangChange, setLang, t, type Lang } from '../i18n';
 import { cleanName, NAME_MAX, ROOM_RE } from './protocol';
 
 const TIMEOUT_MS = 10000;
@@ -9,16 +10,20 @@ const LS_KEY = 'orbderby.name';
 const css = `
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;background:#f7f1ff;color:#3a3358;font-family:system-ui,-apple-system,'Apple SD Gothic Neo',sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}
-.card{width:100%;max-width:420px;background:#fff;border-radius:28px;padding:28px 22px;box-shadow:0 10px 30px rgba(120,100,180,.18)}
+.card{position:relative;width:100%;max-width:420px;background:#fff;border-radius:28px;padding:28px 22px;box-shadow:0 10px 30px rgba(120,100,180,.18)}
 h1{margin:0 0 6px;font-size:40px;font-weight:900;letter-spacing:1px;text-align:center;color:#e0508a}
-.eyebrow{margin:0 0 6px;font-size:13px;font-weight:800;letter-spacing:2px;color:#c23375}
+.eyebrow{margin:12px 0 6px;font-size:13px;font-weight:800;letter-spacing:2px;color:#c23375}
 p{margin:0 0 18px;text-align:center;color:#6b6490;font-size:16px;line-height:1.5}
 input{width:100%;font-size:22px;padding:16px;border-radius:18px;border:3px solid #ded2ff;background:#fbf9ff;color:#3a3358;outline:none}
 input:focus{border-color:#b8a9ff}
-button{width:100%;margin-top:14px;font-size:22px;font-weight:700;padding:16px;border:0;border-radius:18px;background:#ff7b8f;color:#fff;cursor:pointer}
+button{width:100%;margin-top:14px;font-size:22px;font-weight:700;padding:16px;border:0;border-radius:18px;background:#c23375;color:#fff;cursor:pointer}
 button:disabled{background:#d9d3e8;cursor:default}
 .status{margin-top:16px;text-align:center;font-size:18px;min-height:27px;overflow-wrap:anywhere}
-.ok{color:#2f9e6e;font-weight:700}.bad{color:#d6455d}
+.ok{color:#2f9e6e;font-weight:700}.bad{color:#b3263f}
+button:focus-visible,input:focus-visible{outline:3px solid #6a4fd8;outline-offset:2px}
+.lang{position:absolute;top:12px;right:14px;display:flex;border:2px solid #a8245e;border-radius:999px;overflow:hidden;background:#fff}
+.lang .lb{width:auto;margin:0;font-size:12px;font-weight:900;padding:4px 10px;border-radius:0;background:#fff;color:#a8245e;letter-spacing:.5px;line-height:1.2}
+.lang .lb[aria-pressed=true]{background:#a8245e;color:#fff}
 `;
 
 const root = document.getElementById('join')!;
@@ -37,29 +42,81 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: 
 
 const card = el('div', undefined, 'card');
 root.replaceChildren(card);
-card.append(el('p', '구슬 경주 추첨기', 'eyebrow'), el('h1', 'ORB DERBY'));
+const eyebrow = el('p', undefined, 'eyebrow');
+const relabels: (() => void)[] = [];
+const bind = (fn: () => void) => {
+  fn();
+  relabels.push(fn);
+};
+
+// 언어 토글 [KO | EN]
+const langBox = el('div', undefined, 'lang');
+langBox.setAttribute('role', 'group');
+const langBtns: [Lang, HTMLButtonElement][] = (['ko', 'en'] as Lang[]).map((l) => {
+  const b = el('button', l.toUpperCase(), 'lb');
+  b.type = 'button';
+  b.lang = l;
+  b.onclick = () => setLang(l);
+  langBox.append(b);
+  return [l, b];
+});
+bind(() => {
+  document.title = t('doc.joinTitle');
+  eyebrow.textContent = t('join.eyebrow');
+  langBox.setAttribute('aria-label', t('lang.label'));
+  for (const [l, b] of langBtns) {
+    b.setAttribute('aria-pressed', getLang() === l ? 'true' : 'false');
+    b.setAttribute('aria-label', t('lang.' + l));
+  }
+});
+card.append(langBox, eyebrow, el('h1', 'ORB DERBY'));
+onLangChange(() => relabels.forEach((f) => f()));
 
 if (!ROOM_RE.test(room)) {
-  card.append(el('p', '참가 주소가 올바르지 않습니다. 진행자 화면의 QR 코드를 다시 찍어 주세요.'));
+  const bad = el('p');
+  bind(() => {
+    bad.textContent = t('join.badUrl');
+  });
+  card.append(bad);
 } else {
-  card.append(el('p', '참가하기 — 이름을 입력하세요'));
+  const prompt = el('p');
+  bind(() => {
+    prompt.textContent = t('join.prompt');
+  });
+  card.append(prompt);
   const input = el('input');
   input.type = 'text';
   input.maxLength = NAME_MAX;
-  input.placeholder = '이름';
+  bind(() => {
+    input.placeholder = t('join.placeholder');
+  });
   input.autocomplete = 'off';
   try {
     input.value = (localStorage.getItem(LS_KEY) ?? '').slice(0, NAME_MAX);
   } catch {
     /* 저장소 사용 불가 */
   }
-  const btn = el('button', '참가하기');
+  const btn = el('button');
   const status = el('div', undefined, 'status');
   card.append(input, btn, status);
 
-  const show = (text: string, cls = '') => {
-    status.textContent = text;
-    status.className = 'status ' + cls;
+  // 상태 문구·버튼 라벨은 키로 기억해 두었다가 언어가 바뀌면 다시 번역한다.
+  // 진행자가 보낸 사유는 키(reason.*)이거나 옛 진행자의 원문이다(t가 없는 키는 원문 그대로 돌려준다).
+  let statusKey = '';
+  let statusParams: Record<string, string | number> = {};
+  let statusCls = '';
+  let btnKey = 'join.button';
+  const paint = () => {
+    status.textContent = statusKey ? t(statusKey, statusParams) : '';
+    status.className = 'status ' + statusCls;
+    btn.textContent = t(btnKey);
+  };
+  bind(paint);
+  const show = (key: string, cls = '', params: Record<string, string | number> = {}) => {
+    statusKey = key;
+    statusParams = params;
+    statusCls = cls;
+    paint();
   };
 
   let peer: Peer | null = null;
@@ -71,7 +128,7 @@ if (!ROOM_RE.test(room)) {
 
   const join = () => {
     const name = cleanName(input.value);
-    if (!name) return show('이름을 1~20자로 입력해 주세요', 'bad');
+    if (!name) return show('join.nameError', 'bad');
     try {
       localStorage.setItem(LS_KEY, name);
     } catch {
@@ -80,38 +137,38 @@ if (!ROOM_RE.test(room)) {
     cleanup();
     const my = ++attempt;
     btn.disabled = true;
-    show('연결 중...');
+    show('join.connecting');
     let done = false;
-    const finish = (text: string, cls: string, retry: boolean) => {
+    const finish = (key: string, cls: string, retry: boolean, params: Record<string, string | number> = {}) => {
       if (done || my !== attempt) return;
       done = true;
       clearTimeout(timer);
-      show(text, cls);
+      btnKey = retry ? 'join.retry' : 'join.rename';
+      show(key, cls, params);
       btn.disabled = false;
-      btn.textContent = retry ? '다시 시도' : '이름 바꿔 다시 참가';
     };
     const timer = window.setTimeout(() => {
-      finish('진행자와 연결하지 못했습니다. 같은 방 주소인지 확인하고 다시 시도해 주세요.', 'bad', true);
+      finish('join.timeout', 'bad', true);
       cleanup();
     }, TIMEOUT_MS);
 
     const p = new Peer();
     peer = p;
-    p.on('error', (e) => finish(`연결 오류: ${(e as { type?: string }).type ?? '알 수 없음'}`, 'bad', true));
+    p.on('error', (e) => finish('join.peerError', 'bad', true, { type: (e as { type?: string }).type ?? t('join.unknown') }));
     p.on('open', () => {
       const conn = p.connect(room, { reliable: true });
       conn.on('open', () => {
-        show('참가 요청 중...');
+        show('join.requesting');
         const msg: JoinMsg = { type: 'join', name };
         conn.send(msg);
       });
       conn.on('data', (d) => {
         const r = d as Partial<JoinReply> | null;
         if (!r || r.type !== 'joined') return;
-        if (r.ok) finish('참가 완료! 진행자 화면을 보세요', 'ok', false);
-        else finish(r.reason ?? '참가하지 못했습니다', 'bad', true);
+        if (r.ok) finish('join.done', 'ok', false);
+        else finish(r.reason ?? 'join.rejected', 'bad', true);
       });
-      conn.on('error', () => finish('연결이 끊겼습니다. 다시 시도해 주세요.', 'bad', true));
+      conn.on('error', () => finish('join.dropped', 'bad', true));
     });
   };
 
