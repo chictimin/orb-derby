@@ -72,11 +72,13 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
     if (dt <= 0) return;
     tmp.copy(fp).sub(prevFocus).divideScalar(dt);
     prevFocus.copy(fp);
-    // 진행 방향은 수평 성분 위주로 본다(카메라가 위아래로 출렁이지 않게).
-    tmp.y *= 0.3;
-    const sp = tmp.length();
-    if (sp > 0.6) {
-      tmp.normalize();
+    // 타워 코스 구간 사이 자유낙하 대응: 방향 추정은 수평 성분만으로 갱신한다.
+    // 낙하 중(수평 속도 ≈ 0)에는 마지막 수평 방향을 유지해 카메라가 머리 위로 솟구치지 않고,
+    // 카메라 높이(fp.y + 5.2 직접 추종)도 평활 없이 따라가 위아래 출렁임이 없다.
+    tmp.y = 0;
+    const spH = tmp.length();
+    if (spH > 0.8) {
+      tmp.divideScalar(spH);
       const k = 1 - Math.exp(-dt * 1.8);
       dirS.lerp(tmp, k);
       if (dirS.lengthSq() < 1e-6) dirS.set(0, 0, -1);

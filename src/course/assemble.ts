@@ -2,7 +2,9 @@
 import * as THREE from 'three';
 import { DROP_GAP, TOWER_TOP, type Course, type Rapier, type SectionBuilt, type SectionDef, type World } from '../types';
 
-const FINISH_RADIUS = 10;
+const FINISH_RADIUS = 13;
+/** 결승 판정 원기둥 반경: 마지막 출구 아래로 떨어지는 구슬이 이 안을 지나면 완주(접시에서 튕겨 나가도 인정) */
+const FINISH_CATCH = 16;
 
 // import.meta.glob은 registry.ts에 둔다(헤드리스 시뮬레이터가 node에서 이 파일을 쓰기 때문).
 
@@ -43,13 +45,13 @@ export function assembleFrom(
       const a = (i / n) * Math.PI * 2;
       const x = pad.x + Math.cos(a) * (FINISH_RADIUS + 0.25);
       const z = pad.z + Math.sin(a) * (FINISH_RADIUS + 0.25);
-      const rb = world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(x, pad.y + 0.75, z).setRotation(
+      const rb = world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(x, pad.y + 1.25, z).setRotation(
         new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -a),
       ));
       const half = (Math.PI * (FINISH_RADIUS + 0.25)) / n + 0.05;
-      world.createCollider(R.ColliderDesc.cuboid(0.25, 0.75, half), rb);
-      const wm = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.5, half * 2), new THREE.MeshStandardMaterial({ color: 0xff9ec4 }));
-      wm.position.set(x, pad.y + 0.75, z);
+      world.createCollider(R.ColliderDesc.cuboid(0.25, 1.25, half), rb);
+      const wm = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.5, half * 2), new THREE.MeshStandardMaterial({ color: 0xff9ec4, transparent: true, opacity: 0.4 }));
+      wm.position.set(x, pad.y + 1.25, z);
       wm.rotation.y = -a;
       scene.add(wm);
     }
@@ -137,7 +139,8 @@ export function assembleFrom(
   return {
     spawnPoints,
     progressOf: (p) => THREE.MathUtils.clamp(nearest(p).s / total, 0, 1),
-    isFinished: (p) => p.y < pad.y + 1.6 && Math.hypot(p.x - pad.x, p.z - pad.z) < FINISH_RADIUS + 1,
+    // 결승 = 마지막 출구 높이 아래 2.5 지점을 결승 원기둥 안에서 지남(접시 착지 전에 판정 → 튕겨 나가도 완주)
+    isFinished: (p) => p.y < end.y - 2.5 && Math.hypot(p.x - pad.x, p.z - pad.z) < FINISH_CATCH,
     isOut: (p) => p.y < pad.y - 10 || nearest(p).d > 30,
     respawnPoint: (pr) => pointAt(pr * total + 1.5).add(new THREE.Vector3(0, 1.2, 0)),
     checkpoints,

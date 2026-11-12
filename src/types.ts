@@ -126,14 +126,22 @@ export interface RaceSnapshot {
   t: number;
   /** 진행도 내림차순 정렬(결승 통과자는 place 순으로 맨 앞) */
   ranked: Marble[];
-  /** 현재 판정상 '당첨 후보' — first 모드면 선두, last 모드면 꼴찌 쪽 미완주자 */
+  /** 카메라 주인공 — first 모드면 아직 달리는 선두, last 모드면 꼴찌 쪽 미완주자 */
   focus: Marble | null;
+  /**
+   * 당첨 확정 구슬. first: 1등 도착 즉시 확정되고 레이스는 전원 완주까지 계속(캡틴: 끝나면 전체 순위).
+   * last: 한 명 남는 순간 확정(그 구슬 place = N, finishedAt = null). 확정 전 null.
+   */
+  winner: Marble | null;
 }
 export interface CameraDirector {
   update(dt: number, snap: RaceSnapshot): void;
   /** true면 자동 연출 정지, OrbitControls로 자유 조작 */
   setManual(on: boolean): void;
   isManual(): boolean;
+  /** 참여자 시점(캡틴 요청): id의 구슬을 전용 추적샷으로 따라간다. null이면 자동 연출 복귀. 수동 모드보다 우선순위 낮음 */
+  follow?(id: number | null): void;
+  following?(): number | null;
 }
 export type CreateCameraDirector = (
   camera: THREE.PerspectiveCamera,
@@ -146,9 +154,58 @@ export interface UI {
   /** 로비 표시. 시작 버튼 누르면 cb(이름 목록, 모드) */
   showLobby(onStart: (names: string[], mode: WinMode) => void): void;
   showCountdown(n: number): void; // 3,2,1,0(=GO). 0 다음엔 사라짐
-  updateHud(snap: RaceSnapshot, manual: boolean): void;
+  /** following: 현재 시점 고정 대상 구슬 id(없으면 null) — 리더보드에서 강조·해제 버튼 표시용 */
+  updateHud(snap: RaceSnapshot, manual: boolean, speed?: number, following?: number | null): void;
   showResult(winner: Marble, ranked: Marble[], mode: WinMode, onRestart: () => void): void;
   /** HUD의 수동 카메라 토글 버튼 콜백 등록 */
   onToggleManual(cb: () => void): void;
+  /** 참여자 시점 선택 콜백(리더보드 이름 클릭 등). null = 자동 연출 */
+  onFollow?(cb: (id: number | null) => void): void;
+  /** 배속 조절(캡틴). HUD에 일시정지/0.5x/1x/2x/4x 버튼. cb(배속), 0 = 일시정지. 현재 배속 표시용으로 updateHud의 speed 인자도 본다 */
+  onSpeed?(cb: (x: number) => void): void;
 }
 export type CreateUI = (root: HTMLElement) => UI;
+
+// ───────── QR 참가(P2P, PeerJS) — src/party/* (워커 rone) ─────────
+// 진행자(로비)가 방 피어를 열고 QR(join.html?room=<roomId>)을 띄운다. 참가자 휴대폰이 join.html에서 이름을 보내면
+// 진행자 UI 명단에 추가된다. 이름은 브라우저 간 DataConnection으로 직접 간다(PeerJS 공개 서버는 연결 중개만).
+export interface JoinInfo {
+  roomId: string;
+  /** 참가 페이지 절대 URL(QR 내용) */
+  url: string;
+  /** QR 이미지 data URL */
+  qrDataUrl: string;
+  /** location이 localhost 등이라 휴대폰에서 못 여는 주소면 true(UI가 경고) */
+  unreachable: boolean;
+}
+export type PartyStatus = 'connecting' | 'ready' | 'error';
+/** 참가자 → 진행자 */
+export type JoinMsg = { type: 'join'; name: string };
+/** 진행자 → 참가자 */
+export type JoinReply = { type: 'joined'; ok: boolean; reason?: string };
+export interface PartyHost {
+  info: JoinInfo;
+  close(): void;
+}
+/**
+ * 진행자 피어 시작. onJoin(name)이 {ok, reason}을 돌려주면 그대로 참가자에게 회신한다.
+ * 방 ID 충돌(unavailable-id)이면 새 ID로 재시도. 서버 연결이 끊기면 재연결.
+ */
+export type StartPartyHost = (
+  onJoin: (name: string) => { ok: boolean; reason?: string },
+  onStatus: (s: PartyStatus, msg?: string) => void,
+) => Promise<PartyHost>;
+
+// UI(워커 B) 확장 — 선택 메서드
+export interface UI {
+  /** QR 참가자 추가. 중복 이름·40명 초과·빈 이름이면 ok:false + 사유 */
+  addParticipant?(name: string): { ok: boolean; reason?: string };
+  /** 로비에 QR·주소·상태 표시. info null이면 숨김 */
+  setJoinInfo?(info: JoinInfo | null, status: PartyStatus, msg?: string): void;
+  /**
+   * 참가 방식 탭(캡틴: 직접 입력 / QR 참가 따로). 'qr' 탭으로 바뀔 때만 코어가 P2P 방을 열고, 'manual'로 돌아오면 닫는다.
+   * UI는 로비 표시 시 현재 탭으로 한 번 호출해 초기 상태를 알린다.
+   */
+  onEntryMode?(cb: (m: EntryMode) => void): void;
+}
+export type EntryMode = 'manual' | 'qr';

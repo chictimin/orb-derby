@@ -76,6 +76,27 @@ export function makeKit(ctx: SectionCtx) {
   }
 
   const Q0 = new THREE.Quaternion();
+
+  function trimeshBody(geom: THREE.BufferGeometry, color: number, opt: PhysOpt) {
+    const g = geom.index ? geom : (geom.setIndex([...Array(geom.attributes.position.count).keys()]), geom);
+    const v = new Float32Array(g.attributes.position.array as ArrayLike<number>);
+    const idx = new Uint32Array(g.index!.array as ArrayLike<number>);
+    // 이음매 튐 방지: 인접 삼각형 법선을 고려해 내부 모서리 접촉을 보정 + 중복 정점 병합
+    const flags = R.TriMeshFlags.FIX_INTERNAL_EDGES | R.TriMeshFlags.MERGE_DUPLICATE_VERTICES;
+    g.computeVertexNormals();
+    const res = place(R.RigidBodyDesc.fixed(), R.ColliderDesc.trimesh(v, idx, flags), g, new THREE.Vector3(), Q0, color, {
+      cast: false,
+      ...opt,
+    });
+    // 곡면은 안팎 어느 쪽에서도 보이게
+    if (res.mesh) {
+      const m = (res.mesh.material as THREE.MeshStandardMaterial).clone();
+      m.side = THREE.DoubleSide;
+      res.mesh.material = m;
+    }
+    return res;
+  }
+
   return {
     box: (hx: number, hy: number, hz: number, pos: THREE.Vector3, quat = Q0, color = PASTEL.wall, opt: PhysOpt = {}) =>
       place(R.RigidBodyDesc.fixed(), R.ColliderDesc.cuboid(hx, hy, hz), new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2), pos, quat, color, opt),
@@ -90,11 +111,50 @@ export function makeKit(ctx: SectionCtx) {
      * 임의 메시(월드 좌표 정점) → 고정 trimesh 충돌체. 파이프·곡면 받침 등.
      * 주의: trimesh는 두께가 0이라 빠른 구슬이 뚫을 수 있다 — 속도 상한 22, CCD 켜짐 전제에서도 급경사 고속 구간은 피한다.
      */
-    trimesh: (geom: THREE.BufferGeometry, color = PASTEL.sky, opt: PhysOpt = {}) => {
-      const g = geom.index ? geom : (geom.setIndex([...Array(geom.attributes.position.count).keys()]), geom);
-      const v = new Float32Array(g.attributes.position.array as ArrayLike<number>);
-      const idx = new Uint32Array(g.index!.array as ArrayLike<number>);
-      return place(R.RigidBodyDesc.fixed(), R.ColliderDesc.trimesh(v, idx), g, new THREE.Vector3(), Q0, color, opt);
+    trimesh: (geom: THREE.BufferGeometry, color = PASTEL.sky, opt: PhysOpt = {}) => trimeshBody(geom, color, opt),
+    /**
+     * 매끈한 경사로(캡틴 지적: 상자 이어붙인 바닥은 이음매에서 계단처럼 튄다).
+     * path: 바닥 표면 중심선(월드, 위→아래). 폭 width. 한 덩어리 trimesh + FIX_INTERNAL_EDGES라 이음매 튐이 없다.
+     * 곡선이면 점을 촘촘히(<= 1.5) 준다. banking: 바깥쪽을 들어올리는 각도(rad, 커브에서 이탈 방지).
+     */
+    ramp: (path: THREE.Vector3[], width: number, color = PASTEL.peach, opt: PhysOpt & { banking?: number } = {}) => {
+      const pos: number[] = [];
+      const idx: number[] = [];
+      const up = new THREE.Vector3(0, 1, 0);
+      for (let i = 0; i < path.length; i++) {
+        const a = path[Math.max(0, i - 1)];
+        const b = path[Math.min(path.length - 1, i + 1)];
+        const fwd = new THREE.Vector3().subVectors(b, a).setY(0).normalize();
+        const side = new THREE.Vector3().crossVectors(fwd, up).normalize(); // 오른쪽
+        const lift = Math.tan(opt.banking ?? 0) * (width / 2);
+        const l = path[i].clone().addScaledVector(side, -width / 2);
+        const r = path[i].clone().addScaledVector(side, width / 2);
+        l.y += lift;
+        r.y += lift;
+        pos.push(l.x, l.y, l.z, r.x, r.y, r.z);
+        if (i > 0) {
+          const k = i * 2;
+          idx.push(k - 2, k - 1, k, k - 1, k + 1, k);
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setIndex(idx);
+      g.computeVertexNormals();
+      return trimeshBody(g, color, opt);
+    },
+    /**
+     * 매끈한 회전체 깔때기(한 덩어리). center = 림 중심(림 높이), 림 반경 rimR → 구멍 반경 holeR, 깊이 depth.
+     * 벽 기울기는 atan(depth / (rimR - holeR)) — 30° 이상 되게 고른다. 구멍은 뚫려 있다.
+     */
+    funnel: (center: THREE.Vector3, rimR: number, holeR: number, depth: number, color = PASTEL.lilac, opt: PhysOpt = {}) => {
+      const prof = [new THREE.Vector2(holeR, -depth), new THREE.Vector2(rimR, 0)];
+      const steps = 6;
+      const pts: THREE.Vector2[] = [];
+      for (let i = 0; i <= steps; i++) pts.push(prof[0].clone().lerp(prof[1], i / steps));
+      const g = new THREE.LatheGeometry(pts, 48);
+      g.translate(center.x, center.y, center.z);
+      return trimeshBody(g, color, { ...opt, opacity: opt.opacity ?? 1 });
     },
     /** 장식 전용(충돌 없음) */
     deco: (geom: THREE.BufferGeometry, pos: THREE.Vector3, quat = Q0, color = PASTEL.pink) => {

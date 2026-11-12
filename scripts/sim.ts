@@ -18,6 +18,7 @@ const RUNS = Number(arg('runs', '3'));
 const TIMEOUT = Number(arg('timeout', '150'));
 const ONLY = arg('sections', '').split(',').filter(Boolean);
 const LEGACY = process.argv.includes('--legacy');
+const SEED0 = Number(arg('seed', '1'));
 const STEP = 1 / 60;
 const MAX_SPEED = 22;
 
@@ -56,7 +57,7 @@ async function run(seed: number) {
         .setAngularDamping(0.2),
     );
     world.createCollider(RAPIER.ColliderDesc.ball(MARBLE_RADIUS).setRestitution(0.45).setFriction(0.2), body);
-    return { k, body, progress: 0, fin: null as number | null, outs: 0, kicks: 0, stuck: 0, early: 0 };
+    return { k, body, progress: 0, fin: null as number | null, outs: 0, kicks: 0, stuck: 0, early: 0, streak: 0, lastCi: -1 };
   });
 
   const p = new THREE.Vector3();
@@ -72,6 +73,10 @@ async function run(seed: number) {
       const q = m.body.translation();
       p.set(q.x, q.y, q.z);
       if (course.isOut(p)) {
+        if (process.argv.includes('--why')) {
+          const ci = cps.filter((c) => c <= m.progress).length - 1;
+          console.error(`out: 구간#${ci} progress ${m.progress.toFixed(3)} 위치 (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}) t=${t.toFixed(1)}`);
+        }
         const cp = cps.filter((c) => c <= m.progress).pop() ?? 0;
         m.body.setTranslation(course.respawnPoint(cp), true);
         m.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -90,8 +95,21 @@ async function run(seed: number) {
       }
       m.stuck = sp < 0.25 ? m.stuck + STEP : 0;
       if (m.stuck > 3) {
-        const mass = m.body.mass();
-        m.body.applyImpulse({ x: (rand() - 0.5) * 4 * mass, y: 4 * mass, z: (rand() - 0.5) * 4 * mass }, true);
+        // 코어와 동일: 끼임 = 체크포인트 복귀(kicks = 끼임 복귀 횟수), 같은 체크포인트 3회 연속이면 다음으로
+        let ci = Math.max(0, cps.filter((c) => c <= m.progress).length - 1);
+        m.streak = m.lastCi === ci ? m.streak + 1 : 1;
+        m.lastCi = ci;
+        if (m.streak > 3 && ci + 1 < cps.length) {
+          ci++;
+          m.streak = 0;
+        }
+        if (process.argv.includes('--why') && m.kicks < 2) {
+          console.error(`stuck: progress ${m.progress.toFixed(3)} 위치 (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}) t=${t.toFixed(1)}`);
+        }
+        const cp = cps[ci];
+        m.body.setTranslation(course.respawnPoint(cp), true);
+        m.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        m.progress = cp;
         m.stuck = 0;
         m.kicks++;
       }
@@ -114,4 +132,4 @@ async function run(seed: number) {
   };
 }
 
-for (let i = 0; i < RUNS; i++) console.log(`run${i + 1}`, JSON.stringify(await run(i + 1)));
+for (let i = 0; i < RUNS; i++) console.log(`run${i + 1}(seed ${SEED0 + i})`, JSON.stringify(await run(SEED0 + i)));
