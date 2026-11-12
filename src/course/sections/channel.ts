@@ -3,7 +3,7 @@
 // 운 요소: 1단의 회전 쓸개 바(옆 틈으로 밀려나면 2단 직행 슬라이드), 2단의 주기 함정문(열리면 3단 직행 슬라이드).
 import * as THREE from 'three';
 import type { Hotspot, SectionDef } from '../../types';
-import { PASTEL, makeKit } from '../kit';
+import { PASTEL, glassMat, makeKit } from '../kit';
 
 type V3 = THREE.Vector3;
 const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -16,6 +16,7 @@ const WALL_UP = 1.8; // 바닥 위 벽 높이
 const TH_STRAIGHT = 24 * D2R;
 const TH_TURN = 26 * D2R;
 const WALL = { opacity: 0.35, cast: false, friction: 0.0 };
+const WALL_PHYS = { opacity: 0.35, friction: 0.0, restitution: 0.25 };
 const FLOOR = { friction: 0.0 };
 // 바닥은 매끈한 한 덩어리 trimesh(strip/patch/funnel) + 아래 0.12~0.25에 보이지 않는 cuboid 받침(터널링 방지)
 const BACK = { friction: 0.0, invisible: true };
@@ -75,6 +76,14 @@ export const section: SectionDef = {
     const kit = makeKit(ctx);
     const E = ctx.entry;
 
+    // 상자 벽을 남기는 곳(U턴·함정문 등)은 겹침 깜빡임을 줄이는 glassMat 재질로
+    const glassify = <T extends { mesh: THREE.Mesh | null }>(r: T, opt: { opacity?: number }): T => {
+      if (r.mesh && opt.opacity !== undefined && opt.opacity < 1) {
+        r.mesh.material = glassMat(PASTEL.wall, opt.opacity);
+        r.mesh.renderOrder = 2;
+      }
+      return r;
+    };
     const fbox = (
       o: V3,
       f: Frame,
@@ -86,7 +95,7 @@ export const section: SectionDef = {
     ) => {
       const pos = o.clone().addScaledVector(f.T, l[0]).addScaledVector(f.N, l[1]).addScaledVector(f.W, l[2]);
       const q = yaw ? f.q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), yaw)) : f.q;
-      return kit.box(h[0], h[1], h[2], pos, q, color, opt);
+      return glassify(kit.box(h[0], h[1], h[2], pos, q, color, opt), opt);
     };
 
     // ───────── 입구 경사판(깔때기) ─────────
@@ -97,22 +106,16 @@ export const section: SectionDef = {
     const Lp = PLATE_H / Math.cos(PLATE_TH);
     const L1 = 10 / Math.cos(PLATE_TH);
     fbox(O, pf, [Lp / 2, -FLOOR_HT - BACK_DROP, 0], [Lp / 2 + 0.1, FLOOR_HT, 7.5], PASTEL.pink, BACK);
-    fbox(O, pf, [-0.25, 0.55, 0], [0.25, 1.25, 7.5], PASTEL.wall, WALL); // 뒷벽
-    for (const s of [1, -1]) {
-      fbox(O, pf, [L1 / 2, 0.55, s * 7.25], [L1 / 2 + 0.25, 1.25, 0.25], PASTEL.wall, WALL);
-      // 수렴 벽(깔때기, 진행방향 대비 약 43°)
-      const dl = Lp - L1;
-      const dz = s * (HW + WALL_HT - 7.25);
-      const ell = Math.hypot(dl, dz);
-      fbox(
-        O,
-        pf,
-        [L1 + dl / 2, 0.55, s * 7.25 + dz / 2],
-        [ell / 2 + 0.2, 1.25, 0.25],
-        PASTEL.wall,
-        WALL,
-        -Math.atan2(dz, dl),
-      );
+    // 입구판 벽: 매끈한 리본(뒷벽·옆벽·수렴 벽). 경로 = 벽 안쪽 면의 바닥 표면 점
+    {
+      const sy = (x: number) => O.y - (x - O.x) * Math.tan(PLATE_TH);
+      const X0 = O.x;
+      const X1 = O.x + 10;
+      const X2 = O.x + PLATE_H;
+      kit.wallRibbon([V(X0, sy(X0), O.z + 7.5), V(X0, sy(X0), O.z - 7.5)], WALL_UP, 1, PASTEL.wall, WALL_PHYS);
+      for (const sg of [1, -1] as const) {
+        kit.wallRibbon([V(X0, sy(X0), O.z + sg * 7), V(X1, sy(X1), O.z + sg * 7), V(X2, sy(X2), O.z + sg * (HW))], WALL_UP, sg, PASTEL.wall, WALL_PHYS);
+      }
     }
     const P0 = V(E.x + 7.5, O.y - PLATE_H * Math.tan(PLATE_TH), E.z);
 
@@ -155,11 +158,19 @@ export const section: SectionDef = {
     const xr = E.x + X_RIM;
     const Cb = V(xr + Math.sqrt(R_OUT * R_OUT - 2.5 * 2.5), 0, z3 + 2.5);
     const tier3 = straight(arc2[arc2.length - 1], 1, [X_LEFT, 4.25, X_RIM]);
-    const yr = tier3[tier3.length - 1].y;
-    Cb.y = yr;
+    const yr = tier3[tier3.length - 1].y; // 3단 끝 바닥 높이
+    // 3단 끝~원뿔 테두리 사이 초승달 틈(채널 가장자리에서 테두리가 더 멀다)을 3단 경사 그대로 이어 메운다.
+    // 테두리는 그만큼(yD) 낮춰 판 끝이 테두리보다 높게 → 턱 없이 원뿔로 떨어진다.
+    const t3a = tier3[tier3.length - 2];
+    const t3b = tier3[tier3.length - 1];
+    const th3 = (t3a.y - t3b.y) / (t3b.x - t3a.x);
+    const xcAt = (z: number) => Cb.x - Math.sqrt(Math.max(0, (R_OUT + 0.05) ** 2 - (Cb.z - z) ** 2));
+    const yD = (xcAt(z3 - HW) - xr) * th3;
+    const yrC = yr - yD; // 원뿔 테두리 높이
+    Cb.y = yrC;
 
     // ───────── 조각 생성 ─────────
-    function piece(a: V3, b: V3, color: number, o: { noWall?: 1 | -1; trap?: boolean } = {}) {
+    function piece(a: V3, b: V3, color: number, o: { noWall?: 1 | -1; trap?: boolean; ribbon?: boolean } = {}) {
       const dx = b.x - a.x;
       const dz = b.z - a.z;
       const h = Math.hypot(dx, dz);
@@ -176,6 +187,7 @@ export const section: SectionDef = {
         }
       }
       for (const s of [1, -1]) {
+        if (o.ribbon && !o.trap) continue;
         if (o.noWall && Math.sign(s * fr.W.z) === o.noWall) continue;
         // 함정문 조각: -z쪽 벽은 아래 슈트까지 내려 구슬 이탈 방지, +z쪽은 슈트가 아래로 통과하도록 바닥면에서 시작
         const base = o.trap ? (Math.sign(s * fr.W.z) < 0 ? -3.2 : 0) : -0.7;
@@ -190,17 +202,37 @@ export const section: SectionDef = {
       }
       return { fr, len };
     }
-    const chain = (pts: V3[], color: number, mod: (i: number) => { noWall?: 1 | -1; trap?: boolean } = () => ({})) => {
+    const chain = (pts: V3[], color: number, mod: (i: number) => { noWall?: 1 | -1; trap?: boolean; ribbon?: boolean } = () => ({})) => {
       const out: ReturnType<typeof piece>[] = [];
       for (let i = 1; i < pts.length; i++) out.push(piece(pts[i - 1], pts[i], color, mod(i - 1)));
       return out;
     };
 
-    chain(tier1, PASTEL.sky, (i) => (i >= 1 ? { noWall: 1 } : {}));
+    chain(tier1, PASTEL.sky, (i) => (i >= 1 ? { noWall: 1, ribbon: true } : { ribbon: true }));
     chain(arc1, PASTEL.lilac);
-    chain(tier2, PASTEL.mint, (i) => (i <= 1 ? { noWall: -1 } : i === 4 || i === 5 ? { trap: true } : {}));
+    chain(tier2, PASTEL.mint, (i) => (i <= 1 ? { noWall: -1, ribbon: true } : i === 4 || i === 5 ? { trap: true } : { ribbon: true }));
     chain(arc2, PASTEL.lilac);
-    chain(tier3, PASTEL.peach, () => ({ noWall: -1 }));
+    chain(tier3, PASTEL.peach, () => ({ noWall: -1, ribbon: true }));
+    // 직선 단 벽: 연속 구간마다 리본 1장. sg=+1은 +z쪽 벽
+    const tierWalls = (pts: V3[], dirx: 1 | -1, has: (i: number, sg: 1 | -1) => boolean) => {
+      for (const sg of [1, -1] as const) {
+        let run: V3[] = [];
+        const flush = () => {
+          if (run.length > 1) kit.wallRibbon(run, WALL_UP, (sg * dirx) as 1 | -1, PASTEL.wall, WALL_PHYS);
+          run = [];
+        };
+        for (let i = 0; i < pts.length - 1; i++) {
+          if (has(i, sg)) {
+            if (!run.length) run.push(V(pts[i].x, pts[i].y, pts[i].z + sg * HW));
+            run.push(V(pts[i + 1].x, pts[i + 1].y, pts[i + 1].z + sg * HW));
+          } else flush();
+        }
+        flush();
+      }
+    };
+    tierWalls(tier1, 1, (i, sg) => sg === -1 || i === 0);
+    tierWalls(tier2, -1, (i, sg) => i <= 3 && !(sg === -1 && i <= 1));
+    tierWalls(tier3, 1, (i, sg) => sg === 1);
 
     // ───────── 바닥: 매끈한 한 덩어리 strip(캡틴 지적: 이어붙인 조각 바닥 금지) ─────────
     const strip = (pts: V3[], widths: number[], color: number) => {
@@ -294,7 +326,7 @@ export const section: SectionDef = {
       const top = Math.min(yTop + 1.5, topCap);
       const bot = yBot - 0.3;
       for (const x of [xa - 0.25, xb + 0.25]) {
-        kit.box(0.25, (top - bot) / 2, (zB - zA) / 2 - 0.1, V(x, (top + bot) / 2, (zA + zB) / 2), undefined, PASTEL.wall, WALL);
+        glassify(kit.box(0.25, (top - bot) / 2, (zB - zA) / 2 - 0.1, V(x, (top + bot) / 2, (zA + zB) / 2), undefined, PASTEL.wall, WALL), WALL);
       }
     };
     const chute = (
@@ -383,11 +415,11 @@ export const section: SectionDef = {
     };
 
     // ───────── 원뿔 배수구 ─────────
-    const yh = yr - (R_OUT - R_IN) * Math.tan(CONE);
+    const yh = yrC - (R_OUT - R_IN) * Math.tan(CONE);
     const NC = 24;
     const rc = (R_OUT + R_IN) / 2;
     const coneLen = (R_OUT - R_IN) / Math.cos(CONE);
-    kit.funnel(V(Cb.x, yr, Cb.z), R_OUT, R_IN, yr - yh, PASTEL.lilac, FLOOR);
+    kit.funnel(V(Cb.x, yrC, Cb.z), R_OUT, R_IN, yrC - yh, PASTEL.lilac, FLOOR);
     for (let i = 0; i < NC; i++) {
       // 보이지 않는 받침(깔때기 표면보다 0.08 아래 접평면)
       const phi = (i / NC) * Math.PI * 2;
@@ -415,14 +447,37 @@ export const section: SectionDef = {
       const c = V(Cb.x + u.x * rm, yh + (rm - R_IN) * Math.tan(CONE), Cb.z + u.z * rm).addScaledVector(Y, 0.6);
       kit.box(((r1 - r0) / Math.cos(CONE)) / 2, 0.6, 0.25, c, q, PASTEL.coral);
     }
-    for (let i = 0; i < NC; i++) {
-      const phi = (i / NC) * Math.PI * 2;
-      let dphi = Math.abs(phi - phiE) % (Math.PI * 2);
-      if (dphi > Math.PI) dphi = Math.PI * 2 - dphi;
-      if (dphi < 0.55) continue; // 채널 입구 개구부
-      const qy = new THREE.Quaternion().setFromAxisAngle(AXIS_Y, -phi);
-      const pos = V(Cb.x + Math.cos(phi) * (R_OUT + 0.25), yr + 0.5, Cb.z + Math.sin(phi) * (R_OUT + 0.25));
-      kit.box(0.25, 1.3, (Math.PI * (R_OUT + 0.25)) / NC + 0.12, pos, qy, PASTEL.wall, WALL);
+    {
+      // 림 가드: 채널 입구 개구부(±0.55 rad)만 비운 호 리본(바깥쪽 side=-1)
+      const arcPts: V3[] = [];
+      const nA = 40;
+      for (let i = 0; i <= nA; i++) {
+        const phi = phiE + 0.7 + ((Math.PI * 2 - 1.4) * i) / nA;
+        arcPts.push(V(Cb.x + Math.cos(phi) * R_OUT, yrC, Cb.z + Math.sin(phi) * R_OUT));
+      }
+      kit.wallRibbon(arcPts, WALL_UP, -1, PASTEL.wall, WALL_PHYS);
+    }
+    {
+      // 초승달 메움 판(한 덩어리 trimesh) + -z 쪽 가장자리 벽
+      const rows = 6;
+      const pos: number[] = [];
+      const idx: number[] = [];
+      for (let k = 0; k <= rows; k++) {
+        const z = z3 - HW + ((HW) * k) / rows; // z3-HW → z3(+2.5 오프셋 쪽 중앙까지만)
+        const zc = Math.min(z, Cb.z - 0.001);
+        const xc = xcAt(zc);
+        pos.push(xr, yr, z, xc, yr - (xc - xr) * th3, z);
+        if (k > 0) {
+          const a = (k - 1) * 2;
+          idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+        }
+      }
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setIndex(idx);
+      kit.trimesh(g, PASTEL.peach, FLOOR);
+      const xe = xcAt(z3 - HW);
+      kit.wallRibbon([V(xr, yr, z3 - HW), V(xe, yr - (xe - xr) * th3, z3 - HW)], WALL_UP, -1, PASTEL.wall, WALL_PHYS);
     }
     const exit = V(Cb.x, yh - 0.5, Cb.z);
 

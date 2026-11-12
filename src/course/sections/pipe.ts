@@ -47,15 +47,8 @@ export const section: SectionDef = {
       }
       // 한 덩어리 매끈한 회전체(충돌+시각)
       kit.funnel(W(cx, yTop, cz), rTop, rBot, yTop - yBot, color, { friction: 0.5 });
-      // 테두리 벽(반투명)
-      const M = 28;
-      for (let i = 0; i < M; i++) {
-        const a = (i / M) * Math.PI * 2;
-        const r = rTop + 0.2;
-        const pos = W(cx + Math.cos(a) * r, yTop + rimH / 2, cz + Math.sin(a) * r);
-        const q = new THREE.Quaternion().setFromAxisAngle(Y, -a);
-        kit.box(0.25, rimH / 2, (Math.PI * r) / M + 0.08, pos, q, PASTEL.wall, { opacity: 0.38, cast: false });
-      }
+      // 테두리 벽(반투명 원통 1장 + 보이지 않는 상자 링)
+      kit.rimWall(W(cx, yTop, cz), rTop, rimH, PASTEL.wall, { opacity: 0.38 });
     }
 
     funnel(0, 0, F1.rTop, F1.rBot, F1.yTop, F1.yBot, 16, PASTEL.mint, -F1.yTop);
@@ -71,9 +64,10 @@ export const section: SectionDef = {
       const hx = ((x1 - x0) / 2) / cosP;
       kit.box(hx, 0.25, (z1 - z0) / 2, onPlate(xc, (z0 + z1) / 2, -0.25 + drop), qPlate, color, { invisible: true });
     };
-    const plateWall = (x0: number, x1: number, z: number, h = 1.0) => {
-      const xc = (x0 + x1) / 2;
-      kit.box(((x1 - x0) / 2) / cosP, h / 2, 0.2, onPlate(xc, z, h / 2), qPlate, PASTEL.wall, { opacity: 0.38, cast: false });
+    /** 접시 표면을 따라가는 매끈 가드레일(보이는 리본 1장). side: 바깥쪽 */
+    const plateRail = (x0: number, x1: number, z: number, side: 1 | -1, h = 1.0) => {
+      const path = [x0, (x0 + x1) / 2, x1].map((x) => W(x, surf(x), z));
+      kit.wallRibbon(path, h, side, PASTEL.wall, { opacity: 0.38 });
     };
     // 받침(보이지 않음, 윗면이 표면보다 0.1 아래) + 한 덩어리 L자 바닥 trimesh
     plateBox(-3.5, 3.0, -3.4, 3.6, PASTEL.peach, -0.35);
@@ -98,11 +92,10 @@ export const section: SectionDef = {
       g.setIndex(idx);
       kit.trimesh(g, PASTEL.peach, { receive: true, cast: false });
     }
-    plateWall(-3.6, 3.0, -3.55);
-    plateWall(-3.6, 3.0, 3.75);
-    plateWall(3.0, 5.2, -3.55);
-    plateWall(2.2, 4.6, -0.5); // 레인 분리 능선
-    kit.box(0.2, 2.2, 3.8, W(-3.75, -7.2, 0.1), new THREE.Quaternion(), PASTEL.wall, { opacity: 0.38, cast: false });
+    plateRail(-3.5, 5.2, -3.4, -1);
+    plateRail(-3.5, 3.0, 3.6, 1);
+    plateRail(2.2, 4.6, -0.5, 1); // 레인 분리 능선
+    kit.wallRibbon([W(-3.5, surf(-3.5), -3.4), W(-3.5, surf(-3.5), 0.1), W(-3.5, surf(-3.5), 3.6)], 2.2, 1, PASTEL.wall, { opacity: 0.38 });
 
     // 회전 막대(접시 법선 축으로 회전, 접시와 평행)
     const hub = onPlate(-0.6, 0.2, 0);
@@ -200,8 +193,11 @@ export const section: SectionDef = {
       nC.set(0, Math.cos(psi), Math.sin(psi)); // 회전 후 +y 축
       const midTop = W(C0X, (y0 + y1) / 2, (z0 + z1) / 2);
       kit.box(hw + 0.2, 0.25, len / 2, midTop.clone().addScaledVector(nC, -0.25), q, PASTEL.lemon, {});
-      for (const sx of [-1, 1]) kit.box(0.2, 0.6, len / 2, midTop.clone().addScaledVector(nC, 0.6).add(new THREE.Vector3(sx * (hw + 0.4), 0, 0)), q, PASTEL.wall, { opacity: 0.38, cast: false });
-      kit.box(hw + 0.6, 1.2, 0.2, W(C0X, y0 + 0.9, z0 - 0.3), new THREE.Quaternion(), PASTEL.wall, { opacity: 0.38, cast: false });
+      const topY = (z: number) => y0 - ((z - z0) * dy) / dz;
+      const zs = [z0, (z0 + z1) / 2, z1];
+      kit.wallRibbon(zs.map((z) => W(C0X - (hw + 0.2), topY(z), z)), 1.2, 1, PASTEL.wall, { opacity: 0.38 });
+      kit.wallRibbon(zs.map((z) => W(C0X + (hw + 0.2), topY(z), z)), 1.2, -1, PASTEL.wall, { opacity: 0.38 });
+      kit.wallRibbon([W(C0X - (hw + 0.2), y0, z0 - 0.1), W(C0X + (hw + 0.2), y0, z0 - 0.1)], 1.4, -1, PASTEL.wall, { opacity: 0.38 });
     }
 
     // ── 합류 깔때기 ──

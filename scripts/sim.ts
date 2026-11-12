@@ -57,7 +57,7 @@ async function run(seed: number) {
         .setAngularDamping(0.2),
     );
     world.createCollider(RAPIER.ColliderDesc.ball(MARBLE_RADIUS).setRestitution(0.45).setFriction(0.2), body);
-    return { k, body, progress: 0, fin: null as number | null, outs: 0, kicks: 0, stuck: 0, early: 0, streak: 0, lastCi: -1 };
+    return { k, body, progress: 0, fin: null as number | null, outs: 0, kicks: 0, stuck: 0, early: 0, streak: 0, lastCi: -1, trail: [] as number[] };
   });
 
   const p = new THREE.Vector3();
@@ -77,17 +77,24 @@ async function run(seed: number) {
           const ci = cps.filter((c) => c <= m.progress).length - 1;
           console.error(`out: 구간#${ci} progress ${m.progress.toFixed(3)} 위치 (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}) t=${t.toFixed(1)}`);
         }
-        const cp = cps.filter((c) => c <= m.progress).pop() ?? 0;
-        m.body.setTranslation(course.respawnPoint(cp), true);
+        // 코어와 동일: 떨어지기 약 1초 전 진행도의 중심선 위로 복귀
+        const pr = m.trail.length ? m.trail[Math.max(0, m.trail.length - 5)] : m.progress;
+        m.body.setTranslation(course.respawnPoint(pr), true);
         m.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
-        m.progress = cp;
+        m.progress = pr;
+        m.trail = [pr];
         m.outs++;
         continue;
       }
       const v = m.body.linvel();
       const sp = Math.hypot(v.x, v.y, v.z);
       if (sp > MAX_SPEED) m.body.setLinvel({ x: (v.x * MAX_SPEED) / sp, y: (v.y * MAX_SPEED) / sp, z: (v.z * MAX_SPEED) / sp }, true);
-      m.progress = Math.max(m.progress, course.progressOf(p));
+      const curPr = course.progressOf(p);
+      m.progress = Math.max(m.progress, curPr);
+      if (Math.round(t / STEP) % 15 === 0) {
+        m.trail.push(curPr);
+        if (m.trail.length > 12) m.trail.shift();
+      }
       if (t < 5.01 && t > 4.99) m.early = m.progress;
       if (m.progress >= cps[cps.length - 1] && course.isFinished(p)) {
         m.fin = t;

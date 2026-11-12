@@ -86,6 +86,11 @@ let doneTimer = 0;
 /** 당첨 확정 구슬. 선착순은 1등 도착 즉시 확정되고 레이스는 전원 완주까지 계속된다(캡틴: 끝나면 전체 순위) */
 let winnerM: Marble | null = null;
 const stuckFor = new Map<number, number>();
+// 낙하 복귀 지점(캡틴: 떨어지기 직전 자리). 구슬마다 0.25초 간격 진행도 기록, 낙하 시 약 1초 전 값의 중심선 위로 복귀
+const TRAIL_EVERY = 0.25;
+const TRAIL_BACK = 4; // 4칸 = 1초 전
+const trail = new Map<number, number[]>();
+let trailT = 0;
 const cpStreak = new Map<number, { cp: number; n: number }>();
 
 const palette = (i: number, n: number) => {
@@ -108,6 +113,7 @@ function clearMarbles() {
   marbles = [];
   labels.clear();
   stuckFor.clear();
+  trail.clear();
   cpStreak.clear();
 }
 
@@ -168,7 +174,20 @@ function snapshot(): RaceSnapshot {
 
 const tmp = new THREE.Vector3();
 
-/** 낙하·끼임 공통: 지나온 마지막 체크포인트로 복귀하고 진행도도 그 값으로 낮춘다(캡틴 결정). */
+/** 낙하: 떨어지기 약 1초 전 진행도의 코스 중심선 위로 복귀(가장자리가 아니라 트랙 한가운데라 재낙하가 적다). */
+function returnBeforeFall(m: Marble) {
+  const tr = trail.get(m.id) ?? [];
+  const pr = tr.length ? tr[Math.max(0, tr.length - 1 - TRAIL_BACK)] : m.progress;
+  const rp = course.respawnPoint(pr);
+  m.body.setTranslation({ x: rp.x, y: rp.y, z: rp.z }, true);
+  m.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+  m.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+  m.progress = pr;
+  trail.set(m.id, [pr]); // 복귀 직후 기록을 비워, 바로 다시 떨어져도 같은 지점으로 돌아오게
+  stuckFor.set(m.id, 0);
+}
+
+/** 끼임: 지나온 마지막 체크포인트로 복귀하고 진행도도 그 값으로 낮춘다(같은 자리에 다시 놓으면 또 끼이므로). */
 function returnToCheckpoint(m: Marble) {
   let i = -1;
   for (let k = 0; k < checkpoints.length; k++) if (checkpoints[k] <= m.progress) i = k;
@@ -193,13 +212,14 @@ function physicsStep() {
   if (phase !== 'racing' && phase !== 'done') return; // 로비·카운트다운 중엔 구슬 정지
   world.step();
   raceT += STEP;
+  trailT += STEP;
 
   for (const m of marbles) {
     const p = m.body.translation();
     tmp.set(p.x, p.y, p.z);
     if (m.place !== null) continue;
     if (course.isOut(tmp)) {
-      returnToCheckpoint(m);
+      returnBeforeFall(m);
       continue;
     }
     // 터널링 방지: 속도 상한
@@ -211,7 +231,14 @@ function physicsStep() {
         m.body.setLinvel({ x: v.x * k, y: v.y * k, z: v.z * k }, true);
       }
     }
-    m.progress = Math.max(m.progress, course.progressOf(tmp));
+    const curPr = course.progressOf(tmp);
+    m.progress = Math.max(m.progress, curPr);
+    if (trailT >= TRAIL_EVERY) {
+      const tr = trail.get(m.id) ?? [];
+      tr.push(curPr); // 최대값이 아니라 현재 위치의 진행도(낙하 중 아래 구간 투영으로 부풀려진 값이 섞이지 않게 1초 전 값을 쓴다)
+      if (tr.length > 12) tr.shift();
+      trail.set(m.id, tr);
+    }
     // 완주는 마지막 구간(결승 구간)에 들어온 적이 있는 구슬만 인정 — 탑 옆으로 곧장 떨어진 구슬의 오판 방지
     if (m.progress >= lastCheckpoint && course.isFinished(tmp)) {
       m.place = ++finishCount;
@@ -226,6 +253,8 @@ function physicsStep() {
     stuckFor.set(m.id, s);
     if (s > STUCK_TIME) returnToCheckpoint(m);
   }
+
+  if (trailT >= TRAIL_EVERY) trailT = 0;
 
   if (phase === 'racing') {
     const left = marbles.filter((m) => m.place === null);

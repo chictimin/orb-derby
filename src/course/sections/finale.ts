@@ -3,7 +3,7 @@
 // 결승 접시 둘레에는 화려한 결승 아치 장식(deco).
 import * as THREE from 'three';
 import type { SectionDef } from '../../types';
-import { makeKit, PASTEL } from '../kit';
+import { glassMat, makeKit, PASTEL } from '../kit';
 
 const R_OUT = 15.5;
 const R_IN = 3;
@@ -12,7 +12,6 @@ const N_SEG = 28;
 const DISC_R = 6;
 const DISC_TILT = (14 * Math.PI) / 180;
 const DISC_HH = 0.4;
-const WALL_OP = { opacity: 0.35, cast: false } as const;
 
 function densify(pts: THREE.Vector3[], maxGap = 1.8): THREE.Vector3[] {
   const out: THREE.Vector3[] = [pts[0].clone()];
@@ -49,11 +48,9 @@ export const section: SectionDef = {
       const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(d, n, t));
       const pos = new THREE.Vector3(E.x + o.x * rm, midY, E.z + o.z * rm).addScaledVector(n, -0.45);
       kit.box(slant / 2 + 0.05, 0.3, chord, pos, q, PASTEL.lilac, { friction: 0.3, restitution: 0.2, invisible: true });
-      // 바깥 가드(반투명)
-      const wq = new THREE.Quaternion().setFromAxisAngle(Y, -a);
-      const wp = new THREE.Vector3(E.x + o.x * (R_OUT + 0.4), E.y + 1.4, E.z + o.z * (R_OUT + 0.4));
-      kit.box(0.25, 1.5, chord, wp, wq, PASTEL.wall, WALL_OP);
     }
+    // 바깥 가드(반투명): 원통 옆면 1장 + 보이지 않는 상자 링
+    kit.rimWall(new THREE.Vector3(E.x, E.y - 0.1, E.z), R_OUT + 0.15, 3.0, PASTEL.wall, { opacity: 0.35 });
     const holeY = E.y - (R_OUT - R_IN) * Math.tan(FUN);
 
     // ── 회전 원판 ──
@@ -74,22 +71,26 @@ export const section: SectionDef = {
     // 원판 둘레 가드(반투명): 뒤·옆만 막고 앞쪽(+z) 호는 연다. 원판은 항상 +z가 낮아 구슬은 앞으로 나간다
     const GR = DISC_R + 0.8;
     const GN = 24;
-    for (let i = 0; i < GN; i++) {
-      const a = (i / GN) * Math.PI * 2;
-      const dz = Math.sin(a);
-      const dx = Math.cos(a);
-      if (dz > 0.35) continue; // 앞쪽(+z) 호는 열어 둔다
-      const wq = new THREE.Quaternion().setFromAxisAngle(Y, -a);
-      const wp = new THREE.Vector3(D.x + dx * GR, D.y + 1.1, D.z + dz * GR);
-      kit.box(0.25, 2.9, (Math.PI * GR) / GN + 0.08, wp, wq, PASTEL.wall, WALL_OP);
+    // 뒤·옆 호(+z 앞쪽 약 140°는 열림): 완만한 원호라 리본 1장
+    {
+      const arc: THREE.Vector3[] = [];
+      const a0 = Math.PI - Math.asin(0.35);
+      const a1 = 2 * Math.PI + Math.asin(0.35);
+      const n = 30;
+      for (let i = 0; i <= n; i++) {
+        const a = a0 + ((a1 - a0) * i) / n;
+        arc.push(new THREE.Vector3(D.x + Math.cos(a) * (GR - 0.25), D.y - 1.8, D.z + Math.sin(a) * (GR - 0.25)));
+      }
+      kit.wallRibbon(arc, 5.8, -1, PASTEL.wall, { opacity: 0.35 });
     }
 
     // 앞쪽 열린 호 바깥으로 모이는 V자 가이드: 원판에서 옆으로 크게 튕겨 나가 결승 접시를 벗어나는 것을 막는다
     for (const sgn of [-1, 1]) {
       const x0 = D.x + sgn * 6.5, z0 = D.z + 2.2, x1 = D.x + sgn * 3.0, z1 = D.z + 9.5;
-      const len = Math.hypot(x1 - x0, z1 - z0);
-      const gq = new THREE.Quaternion().setFromAxisAngle(Y, Math.atan2(x1 - x0, z1 - z0));
-      kit.box(0.25, 3.2, len / 2, new THREE.Vector3((x0 + x1) / 2, D.y - 2.2, (z0 + z1) / 2), gq, PASTEL.wall, WALL_OP);
+      const path = [new THREE.Vector3(x0, D.y - 5.4, z0), new THREE.Vector3(x1, D.y - 5.4, z1)];
+      const f = path[1].clone().sub(path[0]).normalize();
+      const outSide = new THREE.Vector3().crossVectors(f, Y).x * sgn > 0 ? 1 : -1; // 중심에서 먼 쪽
+      kit.wallRibbon(path, 6.4, outSide, PASTEL.wall, { opacity: 0.35 });
     }
 
     // 원판 위 반투명 지붕(고리): 말뚝·충돌로 튀어 오른 구슬이 가드를 넘어 날아가지 않게 한다. 깔때기 구멍(반경 3)은 비워 둔다
@@ -97,7 +98,13 @@ export const section: SectionDef = {
       const a = (i / GN) * Math.PI * 2;
       const rq = new THREE.Quaternion().setFromAxisAngle(Y, -a);
       const rp = new THREE.Vector3(D.x + Math.cos(a) * 5.7, D.y + 4.0, D.z + Math.sin(a) * 5.7);
-      kit.box(2.05, 0.25, 1.1, rp, rq, PASTEL.wall, WALL_OP);
+      kit.box(2.05, 0.25, 1.1, rp, rq, PASTEL.wall, { invisible: true });
+    }
+    {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(3.65, 7.75, 48).rotateX(-Math.PI / 2), glassMat(PASTEL.wall, 0.35));
+      ring.position.set(D.x, D.y + 4.0, D.z);
+      ring.renderOrder = 2;
+      ctx.scene.add(ring);
     }
 
     // ── 출구 / 결승 접시 ──

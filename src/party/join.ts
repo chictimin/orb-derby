@@ -10,7 +10,8 @@ const css = `
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;background:#f7f1ff;color:#3a3358;font-family:system-ui,-apple-system,'Apple SD Gothic Neo',sans-serif;display:flex;align-items:center;justify-content:center;padding:20px}
 .card{width:100%;max-width:420px;background:#fff;border-radius:28px;padding:28px 22px;box-shadow:0 10px 30px rgba(120,100,180,.18)}
-h1{margin:0 0 6px;font-size:26px;text-align:center;color:#7a63d6}
+h1{margin:0 0 6px;font-size:40px;font-weight:900;letter-spacing:1px;text-align:center;color:#e0508a}
+.eyebrow{margin:0 0 6px;font-size:13px;font-weight:800;letter-spacing:2px;color:#c23375}
 p{margin:0 0 18px;text-align:center;color:#6b6490;font-size:16px;line-height:1.5}
 input{width:100%;font-size:22px;padding:16px;border-radius:18px;border:3px solid #ded2ff;background:#fbf9ff;color:#3a3358;outline:none}
 input:focus{border-color:#b8a9ff}
@@ -36,12 +37,12 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: 
 
 const card = el('div', undefined, 'card');
 root.replaceChildren(card);
-card.append(el('h1', 'Orb Derby'));
+card.append(el('p', '구슬 경주 추첨기', 'eyebrow'), el('h1', 'ORB DERBY'));
 
 if (!ROOM_RE.test(room)) {
   card.append(el('p', '참가 주소가 올바르지 않습니다. 진행자 화면의 QR 코드를 다시 찍어 주세요.'));
 } else {
-  card.append(el('p', '이름을 입력하고 참가하세요'));
+  card.append(el('p', '참가하기 — 이름을 입력하세요'));
   const input = el('input');
   input.type = 'text';
   input.maxLength = NAME_MAX;

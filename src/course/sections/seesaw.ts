@@ -7,7 +7,6 @@ import type { Hotspot, SectionCtx, SectionDef } from '../../types';
 type Kit = ReturnType<typeof makeKit>;
 const Zax = new THREE.Vector3(0, 0, 1);
 const Yax = new THREE.Vector3(0, 1, 0);
-const GLASS = { opacity: 0.35, cast: false, friction: 0.05, restitution: 0.4 } as const;
 
 /** 다각 깔때기. 표면이 (rimY, Rout) → (yHole, rHole). 벽 경사 deg. 위쪽에 반투명 테두리 가드 */
 function funnel(kit: Kit, cx: number, rimY: number, cz: number, Rout: number, rHole: number, deg: number, n: number, color: number, rimH: number) {
@@ -29,19 +28,8 @@ function funnel(kit: Kit, cx: number, rimY: number, cz: number, Rout: number, rH
     m.makeBasis(new THREE.Vector3(-sa, 0, ca), new THREE.Vector3(-sinS * ca, cosS, -sinS * sa), new THREE.Vector3(-cosS * ca, -sinS, -cosS * sa));
     q.setFromRotationMatrix(m);
     kit.box(hx, hy, hz, new THREE.Vector3(cx + rm * ca, ym, cz + rm * sa), q.clone(), color, { friction: 0.35, restitution: 0.2, invisible: true });
-    if (rimH > 0) {
-      const R2 = Rout + 0.25;
-      kit.box(
-        0.25,
-        rimH / 2,
-        Math.tan(Math.PI / n) * R2 + 0.1,
-        new THREE.Vector3(cx + R2 * ca, rimY + rimH / 2 - 0.3, cz + R2 * sa),
-        new THREE.Quaternion().setFromAxisAngle(Yax, -a),
-        PASTEL.wall,
-        GLASS,
-      );
-    }
   }
+  if (rimH > 0) kit.rimWall(new THREE.Vector3(cx, rimY - 0.3, cz), Rout, rimH, PASTEL.wall, { opacity: 0.35 });
   kit.funnel(new THREE.Vector3(cx, rimY, cz), Rout, rHole, rimY - yHole, color, { friction: 0.35, restitution: 0.2 });
   return yHole;
 }
@@ -67,13 +55,27 @@ function tile(kit: Kit, x0: number, y0: number, x1: number, y1: number, zc: numb
   kit.box(len / 2 + ext, th / 2, halfW, c, new THREE.Quaternion().setFromAxisAngle(Zax, ang), color, { friction: 0.5, restitution: 0.15, invisible: true });
 }
 
-/** 경사 타일 옆 반투명 가드레일 */
-function rail(kit: Kit, x0: number, y0: number, x1: number, y1: number, z: number, h: number, ext = 0.2) {
+function rail(kit: Kit, x0: number, y0: number, x1: number, y1: number, z: number, h: number, side: 1 | -1, ext = 0.2) {
+  // 반투명 가드레일 한 장(리본). x 오름차순 직선. z = 판 가장자리(안쪽 면), side 쪽 바깥에 물리 상자
   const ang = Math.atan2(y1 - y0, x1 - x0);
-  const len = Math.hypot(x1 - x0, y1 - y0);
-  const nx = -Math.sin(ang), ny = Math.cos(ang);
-  const c = new THREE.Vector3((x0 + x1) / 2 + nx * (h / 2 - 0.2), (y0 + y1) / 2 + ny * (h / 2 - 0.2), z);
-  kit.box(len / 2 + ext, h / 2, 0.25, c, new THREE.Quaternion().setFromAxisAngle(Zax, ang), PASTEL.wall, GLASS);
+  const dx = Math.cos(ang), dy = Math.sin(ang);
+  kit.wallRibbon(
+    [new THREE.Vector3(x0 - dx * ext, y0 - dy * ext, z), new THREE.Vector3(x1 + dx * ext, y1 + dy * ext, z)],
+    h,
+    side,
+    PASTEL.wall,
+    { opacity: 0.35 },
+  );
+}
+
+/** 수직 직선 벽(z 방향으로 뻗음) 리본. x = 안쪽 면, side: +1이면 -x 쪽이 바깥, -1이면 +x 쪽이 바깥 */
+function zwall(kit: Kit, x: number, yBot: number, z0: number, z1: number, h: number, side: 1 | -1) {
+  kit.wallRibbon([new THREE.Vector3(x, yBot, z0), new THREE.Vector3(x, yBot, z1)], h, side, PASTEL.wall, { opacity: 0.35 });
+}
+
+/** 수평 직선 벽(x 방향으로 뻗음) 리본. z = 안쪽 면, side: +1이면 +z 쪽이 바깥 */
+function xwall(kit: Kit, x0: number, x1: number, yBot: number, z: number, h: number, side: 1 | -1) {
+  kit.wallRibbon([new THREE.Vector3(x0, yBot, z), new THREE.Vector3(x1, yBot, z)], h, side, PASTEL.wall, { opacity: 0.35 });
 }
 
 function resample(pts: THREE.Vector3[], step = 1.8): THREE.Vector3[] {
@@ -105,8 +107,8 @@ export const section: SectionDef = {
     const y1 = (x: number) => -9.4 - x * tan1;
     const HW = 5.5;
     tile(kit, ex - 8, ey + y1(-8), ex + 9, ey + y1(9), ez, HW, PASTEL.lilac);
-    for (const s of [1, -1]) rail(kit, ex - 8, ey + y1(-8), ex + 9, ey + y1(9), ez + s * (HW + 0.25), 2.6);
-    kit.box(0.25, 2.5, HW + 0.5, P(-8.4, y1(-8) + 1.8, 0), new THREE.Quaternion(), PASTEL.wall, GLASS);
+    for (const s of [1, -1]) rail(kit, ex - 8, ey + y1(-8), ex + 9, ey + y1(9), ez + s * HW, 2.6, s as 1 | -1);
+    zwall(kit, ex - 8.15, ey + y1(-8) - 0.7, ez - HW - 0.5, ez + HW + 0.5, 5, 1);
     const qP1 = new THREE.Quaternion().setFromAxisAngle(Zax, -T1);
     const nP1 = new THREE.Vector3(Math.sin(T1), Math.cos(T1), 0);
     const sw = { x: 3.0 };
@@ -122,12 +124,12 @@ export const section: SectionDef = {
     const lowOff = 1.3;
     tile(kit, ex + XEND, ey + y2(XEND) - lowOff, ex + XLO, ey + y2(XLO) - lowOff, ez, HW, PASTEL.peach); // 아랫판
     for (const s of [1, -1]) {
-      const z = ez + s * (HW + 0.25);
-      rail(kit, ex + XLO, ey + y2(XLO), ex + 10.9, ey + y2(10.9), z, 3.3);
-      rail(kit, ex + XEND, ey + y2(XEND) - lowOff, ex + XLO, ey + y2(XLO) - lowOff, z, 3.0);
+      const z = ez + s * HW;
+      rail(kit, ex + XLO, ey + y2(XLO), ex + 10.9, ey + y2(10.9), z, 3.3, s as 1 | -1);
+      rail(kit, ex + XEND, ey + y2(XEND) - lowOff, ex + XLO, ey + y2(XLO) - lowOff, z, 3.0, s as 1 | -1);
     }
     // 윗판 뒷벽(P1 끝에서 날아온 구슬을 받는다)
-    kit.box(0.25, 3.85, HW + 0.5, P(11.25, -12.65, 0), new THREE.Quaternion(), PASTEL.wall, GLASS);
+    zwall(kit, ex + 11.0, ey - 16.5, ez - HW - 0.5, ez + HW + 0.5, 7.7, -1);
 
     // 시소 판(kinematic): 평균 면은 선 아래 0.6, 흔들림 ±7° → 경사 13~27° (항상 12° 이상), 양 끝은 내려가는 턱만
     const xpc = 0.6;
@@ -147,8 +149,8 @@ export const section: SectionDef = {
     // 슬롯 + 끝벽 + 출구 깔때기
     const floorEnd = y2(XEND) - lowOff;
     const xc = (XEND + XSLOT) / 2;
-    kit.box(0.25, 3.5, HW + 0.5, P(XSLOT - 0.25, floorEnd + 1.0, 0), new THREE.Quaternion(), PASTEL.wall, GLASS);
-    for (const s of [1, -1]) kit.box(1.2, 2.4, 0.25, P(xc, floorEnd + 0.4, s * (HW + 0.25)), new THREE.Quaternion(), PASTEL.wall, GLASS);
+    zwall(kit, ex + XSLOT, ey + floorEnd - 2.5, ez - HW - 0.5, ez + HW + 0.5, 7, 1);
+    for (const s of [1, -1]) xwall(kit, ex + xc - 1.2, ex + xc + 1.2, ey + floorEnd - 2.0, ez + s * HW, 4.8, s as 1 | -1);
     const rimF1 = floorEnd - 3.1;
     const yHoleF1 = funnel(kit, ex + xc, ey + rimF1, ez, 8, 2.4, 35, 24, PASTEL.sky, 1.2);
     const exit = P(xc, yHoleF1 - ey - 0.2, 0);

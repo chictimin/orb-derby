@@ -8,7 +8,6 @@ const TH = (18 * Math.PI) / 180;
 const C = Math.cos(TH);
 const S = Math.sin(TH);
 const W = 12.5; // 판 반폭
-const WALL_OP = { opacity: 0.35, cast: false } as const;
 
 interface Board {
   O: THREE.Vector3;
@@ -54,6 +53,14 @@ export const section: SectionDef = {
     const { R, world, scene, entry } = ctx;
     const kit = makeKit(ctx);
     const { x: ex, y: ey, z: ez } = entry;
+    const UP = new THREE.Vector3(0, 1, 0);
+    /** 직선 벽 리본(보이는 면 1장 + 보이지 않는 물리 상자). inside = 벽의 안쪽(구슬이 있는 쪽) 기준점 */
+    const wall = (path: THREE.Vector3[], height: number, inside: THREE.Vector3) => {
+      const f = path[1].clone().sub(path[0]).normalize();
+      const mid = path[0].clone().add(path[path.length - 1]).multiplyScalar(0.5);
+      const side = new THREE.Vector3().crossVectors(f, UP).dot(mid.sub(inside)) > 0 ? 1 : -1;
+      kit.wallRibbon(path, height, side, PASTEL.wall, { opacity: 0.35 });
+    };
 
     const A = makeBoard(new THREE.Vector3(ex, ey - 1, ez - 9), 1);
     const LA = 29;
@@ -118,10 +125,9 @@ export const section: SectionDef = {
       }
     }
     function walls(b: Board, L: number) {
-      for (const sgn of [-1, 1]) {
-        kit.box(0.25, 1.25, L / 2, at(b, sgn * (W + 0.25), L / 2, 1.25), b.q, PASTEL.wall, WALL_OP);
-      }
-      kit.box(W + 0.5, 1.25, 0.25, at(b, 0, -0.25, 1.25), b.q, PASTEL.wall, WALL_OP);
+      const c = at(b, 0, L / 2, 0);
+      for (const sgn of [-1, 1]) wall([at(b, sgn * W, -0.5, 0), at(b, sgn * W, L, 0)], 2.6, c);
+      wall([at(b, -W - 0.5, 0, 0), at(b, W + 0.5, 0, 0)], 2.6, c);
     }
 
     // 행운 구멍(B판) — 진행 방향으로 길쭉하게 내어 구멍 먼 쪽 모서리에 튕겨 나가지 않고 곧장 떨어지게 한다
@@ -162,25 +168,17 @@ export const section: SectionDef = {
       const zA = at(A, 0, LA + GAP + 0.25, 0).z;
       const topA = at(A, 0, LA + GAP, 2.5).y;
       const botA = at(B, 0, B.dir === -1 ? (B.O.z - zA) / C : 0, 0).y + 2.0;
-      kit.box(W + 0.5, (topA - botA) / 2, 0.25, new THREE.Vector3(ex, (topA + botA) / 2, zA), undefined, PASTEL.wall, WALL_OP);
+      const cA = at(A, 0, 10, 0);
+      wall([new THREE.Vector3(ex - W - 0.5, botA, zA - 0.25), new THREE.Vector3(ex + W + 0.5, botA, zA - 0.25)], topA - botA, cA);
       const zB = at(B, 0, LB + GAP + 0.25, 0).z;
       const topB = at(B, 0, LB + GAP, 2.5).y;
       const botB = exit.y + 1.0;
-      kit.box(W + 0.5, (topB - botB) / 2, 0.25, new THREE.Vector3(ex, (topB + botB) / 2, zB), undefined, PASTEL.wall, WALL_OP);
+      const cB = at(B, 0, 10, 0);
+      wall([new THREE.Vector3(ex - W - 0.5, botB, zB + 0.25), new THREE.Vector3(ex + W + 0.5, botB, zB + 0.25)], topB - botB, cB);
     }
 
     // B판 V자 가이드: 가장자리(u=±12, s=8) → (±6.3, s=23)
-    for (const sgn of [-1, 1]) {
-      const p0 = at(B, sgn * 12.9, 7, 1.1);
-      const p1 = at(B, sgn * 6.3, 23, 1.1);
-      const mid = p0.clone().lerp(p1, 0.5);
-      const len = p0.distanceTo(p1);
-      const dirv = p1.clone().sub(p0).normalize();
-      // 판 평면에서 dirv 방향으로 z축을 맞춘 회전
-      const x2 = new THREE.Vector3().crossVectors(B.N, dirv).normalize();
-      const qq = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x2, B.N, dirv));
-      kit.box(0.25, 1.1, len / 2, mid, qq, PASTEL.wall, WALL_OP);
-    }
+    for (const sgn of [-1, 1]) wall([at(B, sgn * 12.9, 7, 0), at(B, sgn * 6.3, 23, 0)], 2.3, at(B, 0, 15, 0));
 
     // ── 장애물 ──
     // 범퍼·핀은 마찰 0(Min 결합): 구슬이 기둥 정면에 걸려 매달리는 현상을 막는다

@@ -7,7 +7,6 @@ import type { Hotspot, SectionCtx, SectionDef } from '../../types';
 type Kit = ReturnType<typeof makeKit>;
 const Zax = new THREE.Vector3(0, 0, 1);
 const Yax = new THREE.Vector3(0, 1, 0);
-const GLASS = { opacity: 0.35, cast: false, friction: 0.05, restitution: 0.4 } as const;
 
 /** 다각 깔때기. 표면이 (rimY, Rout) → (yHole, rHole). 벽 경사 deg. 위쪽에 반투명 테두리 가드 */
 function funnel(kit: Kit, cx: number, rimY: number, cz: number, Rout: number, rHole: number, deg: number, n: number, color: number, rimH: number) {
@@ -29,19 +28,8 @@ function funnel(kit: Kit, cx: number, rimY: number, cz: number, Rout: number, rH
     m.makeBasis(new THREE.Vector3(-sa, 0, ca), new THREE.Vector3(-sinS * ca, cosS, -sinS * sa), new THREE.Vector3(-cosS * ca, -sinS, -cosS * sa));
     q.setFromRotationMatrix(m);
     kit.box(hx, hy, hz, new THREE.Vector3(cx + rm * ca, ym, cz + rm * sa), q.clone(), color, { friction: 0.35, restitution: 0.2, invisible: true });
-    if (rimH > 0) {
-      const R2 = Rout + 0.25;
-      kit.box(
-        0.25,
-        rimH / 2,
-        Math.tan(Math.PI / n) * R2 + 0.1,
-        new THREE.Vector3(cx + R2 * ca, rimY + rimH / 2 - 0.3, cz + R2 * sa),
-        new THREE.Quaternion().setFromAxisAngle(Yax, -a),
-        PASTEL.wall,
-        GLASS,
-      );
-    }
   }
+  if (rimH > 0) kit.rimWall(new THREE.Vector3(cx, rimY - 0.3, cz), Rout, rimH, PASTEL.wall, { opacity: 0.35 });
   kit.funnel(new THREE.Vector3(cx, rimY, cz), Rout, rHole, rimY - yHole, color, { friction: 0.35, restitution: 0.2 });
   return yHole;
 }
@@ -67,13 +55,27 @@ function tile(kit: Kit, x0: number, y0: number, x1: number, y1: number, zc: numb
   kit.box(len / 2 + ext, th / 2, halfW, c, new THREE.Quaternion().setFromAxisAngle(Zax, ang), color, { friction: 0.5, restitution: 0.15, invisible: true });
 }
 
-/** 경사 타일 옆 반투명 가드레일 */
-function rail(kit: Kit, x0: number, y0: number, x1: number, y1: number, z: number, h: number, ext = 0.2) {
+function rail(kit: Kit, x0: number, y0: number, x1: number, y1: number, z: number, h: number, side: 1 | -1, ext = 0.2) {
+  // 반투명 가드레일 한 장(리본). x 오름차순 직선. z = 판 가장자리(안쪽 면), side 쪽 바깥에 물리 상자
   const ang = Math.atan2(y1 - y0, x1 - x0);
-  const len = Math.hypot(x1 - x0, y1 - y0);
-  const nx = -Math.sin(ang), ny = Math.cos(ang);
-  const c = new THREE.Vector3((x0 + x1) / 2 + nx * (h / 2 - 0.2), (y0 + y1) / 2 + ny * (h / 2 - 0.2), z);
-  kit.box(len / 2 + ext, h / 2, 0.25, c, new THREE.Quaternion().setFromAxisAngle(Zax, ang), PASTEL.wall, GLASS);
+  const dx = Math.cos(ang), dy = Math.sin(ang);
+  kit.wallRibbon(
+    [new THREE.Vector3(x0 - dx * ext, y0 - dy * ext, z), new THREE.Vector3(x1 + dx * ext, y1 + dy * ext, z)],
+    h,
+    side,
+    PASTEL.wall,
+    { opacity: 0.35 },
+  );
+}
+
+/** 수직 직선 벽(z 방향으로 뻗음) 리본. x = 안쪽 면, side: +1이면 -x 쪽이 바깥, -1이면 +x 쪽이 바깥 */
+function zwall(kit: Kit, x: number, yBot: number, z0: number, z1: number, h: number, side: 1 | -1) {
+  kit.wallRibbon([new THREE.Vector3(x, yBot, z0), new THREE.Vector3(x, yBot, z1)], h, side, PASTEL.wall, { opacity: 0.35 });
+}
+
+/** 수평 직선 벽(x 방향으로 뻗음) 리본. z = 안쪽 면, side: +1이면 +z 쪽이 바깥 */
+function xwall(kit: Kit, x0: number, x1: number, yBot: number, z: number, h: number, side: 1 | -1) {
+  kit.wallRibbon([new THREE.Vector3(x0, yBot, z), new THREE.Vector3(x1, yBot, z)], h, side, PASTEL.wall, { opacity: 0.35 });
 }
 
 function resample(pts: THREE.Vector3[], step = 1.8): THREE.Vector3[] {
@@ -116,13 +118,13 @@ export const section: SectionDef = {
     const HW = 7;
     tile(kit, ex + X0, ey + yp(X0), ex + XF, ey + yp(XF), ez, HW, PASTEL.peach);
     for (const s of [1, -1]) {
-      rail(kit, ex + X0, ey + yp(X0), ex + XF, ey + yp(XF), ez + s * (HW + 0.25), 2.6);
+      rail(kit, ex + X0, ey + yp(X0), ex + XF, ey + yp(XF), ez + s * HW, 2.6, s as 1 | -1);
       // 슬롯 구간 옆 가드
-      kit.box(1.5, 2.75, 0.25, new THREE.Vector3(ex + (XF + XW) / 2 + 0.1, ey + yp(XF) - 0.4 + 0.75, ez + s * (HW + 0.25)), new THREE.Quaternion(), PASTEL.wall, GLASS);
+      xwall(kit, ex + XF - 0.15, ex + XW + 0.2, ey + yp(XF) - 1.4, ez + s * HW, 5.5, s as 1 | -1);
     }
     // 뒷벽(위끝)·끝벽(슬롯 뒤)
-    kit.box(0.25, 2.5, HW + 0.5, new THREE.Vector3(ex + X0 - 0.35, ey + yp(X0) + 1.8, ez), new THREE.Quaternion(), PASTEL.wall, GLASS);
-    kit.box(0.25, 3.6, HW + 0.5, new THREE.Vector3(ex + XW + 0.25, ey + yp(XF) + 0.1, ez), new THREE.Quaternion(), PASTEL.wall, GLASS);
+    zwall(kit, ex + X0 - 0.1, ey + yp(X0) - 0.7, ez - HW - 0.5, ez + HW + 0.5, 5, 1);
+    zwall(kit, ex + XW, ey + yp(XF) - 3.5, ez - HW - 0.5, ez + HW + 0.5, 7.2, -1);
 
     // 못(경사판 법선 방향 원기둥). 지그재그 배치
     const qPlate = new THREE.Quaternion().setFromAxisAngle(Zax, -TH);
