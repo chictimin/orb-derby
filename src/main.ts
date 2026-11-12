@@ -1,7 +1,8 @@
 // 코어(PM 소유): 렌더 루프, 물리 스텝, 구슬 생성, 순위·당첨 판정, 끼임·낙하 처리.
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as THREE from 'three';
-import { buildCourse } from './course';
+import { buildCourse as buildLegacy } from './legacy-linear-course';
+import { allSections, assembleCourse } from './course/registry';
 import { createCameraDirector } from './camera';
 import { createUI } from './ui';
 import { MARBLE_RADIUS, type Marble, type Phase, type RaceSnapshot, type WinMode } from './types';
@@ -10,6 +11,7 @@ const STEP = 1 / 60;
 const RACE_TIMEOUT = 150; // 초. 꼴등 모드에서 끝까지 안 들어오는 구슬 대비
 const STUCK_SPEED = 0.25;
 const STUCK_TIME = 3;
+const MAX_SPEED = 22; // m/s. 반지름 0.5 구슬이 한 스텝(1/60s)에 0.37m 이동 → 두께 0.5 충돌체를 못 뚫는 수준
 
 await RAPIER.init();
 
@@ -35,7 +37,11 @@ scene.add(sun);
 
 const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
 world.timestep = STEP;
-const course = buildCourse(RAPIER, world, scene);
+const qs = new URLSearchParams(location.search);
+// 구간 파일이 하나라도 있으면 탑 조립, 없으면 예전 일자 코스. ?sections=a,b 로 일부 구간만 시험
+const only = qs.get('sections')?.split(',').filter(Boolean);
+const course = allSections().length ? assembleCourse(RAPIER, world, scene, only) : buildLegacy(RAPIER, world, scene);
+const checkpoints = [...(course.checkpoints ?? [0, 0.25, 0.5, 0.75])].sort((a, b) => a - b);
 const director = createCameraDirector(camera, renderer.domElement, course);
 const ui = createUI(document.getElementById('ui')!);
 
@@ -124,11 +130,24 @@ function physicsStep() {
     tmp.set(p.x, p.y, p.z);
     if (m.place !== null) continue;
     if (course.isOut(tmp)) {
-      const rp = course.respawnPoint(Math.max(0, m.progress - 0.02));
-      m.body.setTranslation(rp, true);
+      // 체크포인트 복귀(캡틴 결정 2026-11-12): 지나온 마지막 체크포인트로, 진행도도 함께 낮춘다
+      const cp = checkpoints.filter((c) => c <= m.progress).pop() ?? 0;
+      const rp = course.respawnPoint(cp);
+      m.body.setTranslation({ x: rp.x + (Math.random() - 0.5), y: rp.y, z: rp.z }, true);
       m.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
       m.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      m.progress = cp;
+      stuckFor.set(m.id, 0);
       continue;
+    }
+    // 터널링 방지: 속도 상한
+    {
+      const v = m.body.linvel();
+      const sp = Math.hypot(v.x, v.y, v.z);
+      if (sp > MAX_SPEED) {
+        const k = MAX_SPEED / sp;
+        m.body.setLinvel({ x: v.x * k, y: v.y * k, z: v.z * k }, true);
+      }
     }
     m.progress = Math.max(m.progress, course.progressOf(tmp));
     if (course.isFinished(tmp)) {
@@ -181,6 +200,19 @@ function toLobby() {
 ui.onToggleManual(() => director.setManual(!director.isManual()));
 toLobby();
 
+// ───────── 디버그 훅(검증용): ?auto=20&mode=last&speed=6 ─────────
+const SPEED = Math.max(1, Number(qs.get('speed')) || 1);
+const autoN = Number(qs.get('auto')) || 0;
+if (autoN >= 2) startRace(Array.from({ length: autoN }, (_, i) => `P${i + 1}`), qs.get('mode') === 'last' ? 'last' : 'first');
+(window as unknown as { __orb: unknown }).__orb = {
+  state: () => ({
+    phase,
+    t: raceT,
+    ranked: ranked().map((m) => ({ name: m.name, place: m.place, progress: m.progress })),
+  }),
+  start: startRace,
+};
+
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
@@ -209,7 +241,7 @@ renderer.setAnimationLoop((now) => {
     }
   }
 
-  acc += dt;
+  acc += dt * (phase === 'racing' || phase === 'done' ? SPEED : 1);
   while (acc >= STEP) {
     physicsStep();
     acc -= STEP;

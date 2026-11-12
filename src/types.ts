@@ -50,6 +50,12 @@ export interface Course {
   isOut(p: THREE.Vector3): boolean;
   /** 진행도에 해당하는 코스 중심선 위 리스폰 위치 */
   respawnPoint(progress: number): THREE.Vector3;
+  /**
+   * 낙하 시 복귀할 체크포인트 진행도 목록(오름차순, 0 포함). 보통 각 장애물 구간 입구.
+   * 코어는 isOut이면 '지나온 마지막 체크포인트'의 respawnPoint로 되돌리고 진행도도 그 값으로 낮춘다.
+   * 없으면 [0, 0.25, 0.5, 0.75]를 쓴다.
+   */
+  checkpoints?: number[];
   /** 움직이는 장애물 갱신. 매 물리 스텝 전에 호출. t = 레이스 시작 후 누적 초(로비 중에도 증가) */
   update(t: number, dt: number): void;
   hotspots: Hotspot[];
@@ -57,6 +63,60 @@ export interface Course {
   overviewShot: CameraShot;
 }
 export type BuildCourse = (R: Rapier, world: World, scene: THREE.Scene) => Course;
+
+// ───────── 구간(section) 계약 — src/course/sections/<이름>.ts 하나 = 구간 하나 ─────────
+// 각 파일은 `export const section: SectionDef` 하나를 내보낸다. 조립기(src/course/assemble.ts, PM 소유)가
+// import.meta.glob으로 자동 수집해 order 오름차순으로 이어 붙인다. 공유 레지스트리 파일은 없다.
+//
+// 탑 구조(캡틴 2026-11-12): 구간들을 위에서 아래로 쌓는다. 구간끼리 맞붙지 않고, 출구에서 떨어진 구슬을
+// 다음 구간이 입구의 받침(깔때기·접시·넓은 판)으로 받는다.
+//  - entry: 위에서 떨어지는 구슬이 들어오는 지점. 입구 받침은 entry 높이에 테두리 상단을 두고, entry의 xz를 중심으로
+//    반경 CATCH_RADIUS 안에 떨어지는 구슬을 전부 받아야 한다.
+//  - exit: 구슬이 아래로 떨어져 나가는 지점(구멍·끝단). 수평 속도가 크지 않게(<= 6 m/s) 내보낸다.
+//    다음 구간 입구 = exit 바로 아래 DROP_GAP.
+//  - 구간 높이(entry.y - exit.y) 15~35, 평면 범위는 entry xz 기준 반경 FOOTPRINT 이내(탑이 퍼지지 않게).
+//  - 구간 안 구멍·함정문으로 떨어진 구슬은 아래 구간에 착지할 수 있다 → 진행도가 그곳 기준이 되어 '낙하 역전'이 된다.
+//    허공으로 빠지면(어느 중심선에서도 30 이상) 코어가 체크포인트로 복귀시킨다.
+//  - 충돌체 두께 >= 0.5 (터널링 방지). trimesh(두께 0)는 빠른 구간을 피하거나 뒷면에 얇은 cuboid를 덧댄다.
+export const TOWER_TOP = 140;
+export const DROP_GAP = 5;
+export const CATCH_RADIUS = 7;
+export const FOOTPRINT = 30;
+/** @deprecated 탑 구조로 바뀌며 미사용 */
+export const TRACK_WIDTH = 10;
+
+export interface SectionCtx {
+  R: Rapier;
+  world: World;
+  scene: THREE.Scene;
+  /** 입구 받침 중심(월드). 위에서 구슬이 이 xz 주변(반경 CATCH_RADIUS)으로 떨어진다 */
+  entry: THREE.Vector3;
+}
+export interface SectionBuilt {
+  /** 출구(구슬이 아래로 떨어져 나가는 점). exit.y < entry.y */
+  exit: THREE.Vector3;
+  /** 입구→출구 중심선(바닥 위 약 0.6). 첫 점 ≈ entry, 끝 점 ≈ exit. 점 간격 <= 2. 진행도·리스폰에 쓰인다 */
+  centerline: THREE.Vector3[];
+  /**
+   * 갈래 경로(선택). 구간 안에서 갈라졌다가 출구 전에 다시 합류하는 대체 루트들 — 지름길, 함정문 아래 낮은 트랙 등.
+   * 각 루트는 중심선 점 배열이며, 루트 위 위치는 '루트 내 길이 비율'만큼 이 구간 진행도 범위에 선형 대응된다.
+   * 즉 짧은 지름길은 같은 진행도를 빨리 지나간다. 루트 끝점은 본선 중심선 위 합류 지점 근처여야 한다.
+   * 루트는 본선 시작 비율(fromFrac)·합류 비율(toFrac)을 지정한다(본선 길이 기준 0..1).
+   * 구슬이 어떤 루트·본선에서도 30 이상 멀어지면 낙하로 보고 체크포인트 복귀.
+   */
+  routes?: { name: string; points: THREE.Vector3[]; fromFrac: number; toFrac: number }[];
+  hotspots: Hotspot[];
+  /** 움직이는 장애물 구동(kinematic). 없으면 생략 */
+  update?(t: number, dt: number): void;
+  /** 출발 구간만: 구슬 출발 위치(20개 이상) */
+  spawnPoints?: THREE.Vector3[];
+}
+export interface SectionDef {
+  name: string;
+  /** 배치 순서. 0 출발, 90 결승. 같은 숫자 금지 */
+  order: number;
+  build(ctx: SectionCtx): SectionBuilt;
+}
 
 // ───────── camera.ts (워커 B) ─────────
 export interface RaceSnapshot {
