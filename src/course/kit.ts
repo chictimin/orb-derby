@@ -214,7 +214,10 @@ export function makeKit(ctx: SectionCtx) {
         const f = d.clone().normalize();
         const out = new THREE.Vector3().crossVectors(f, up).normalize().multiplyScalar(side);
         const c = a.clone().add(b).multiplyScalar(0.5).addScaledVector(out, 0.25).addScaledVector(up, height / 2);
-        const m = new THREE.Matrix4().makeBasis(out, up.clone().projectOnPlane(f).normalize(), f);
+        // 회전은 항상 오른손 좌표계로(out을 쓰면 side=-1에서 반사 행렬이 되어 회전이 깨진다). 상자는 대칭이라 두께 축 부호 무관
+        const yAx = up.clone().projectOnPlane(f).normalize();
+        const xAx = new THREE.Vector3().crossVectors(yAx, f).normalize();
+        const m = new THREE.Matrix4().makeBasis(xAx, yAx, f);
         const q = new THREE.Quaternion().setFromRotationMatrix(m);
         const body = world.createRigidBody(R.RigidBodyDesc.fixed().setTranslation(c.x, c.y, c.z).setRotation(q));
         world.createCollider(
