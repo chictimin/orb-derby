@@ -65,6 +65,12 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
   let finishDwell = 0;
   const finishPoint = new THREE.Vector3();
 
+  // 우승 순간 winner 샷: 당첨 확정 순간 결승점을 3초간 비추는 컷(RM이면 생략).
+  let winnerActive = false;
+  let winnerDwell = 0;
+  const winnerPoint = new THREE.Vector3();
+  let lastWinnerId: number | null = null;
+
   const desiredPos = new THREE.Vector3();
   const desiredTgt = new THREE.Vector3();
   const tmp = new THREE.Vector3();
@@ -233,11 +239,44 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
 
   function update(dt: number, snap: RaceSnapshot): void {
     if (manual) {
+      winnerActive = false;
       controls.update();
       curTarget.copy(controls.target);
       return;
     }
     if (dt < 0) dt = 0;
+
+    // 우승 확정 순간: follow가 꺼져 있으면 결승점을 3초 비추는 winner 컷(RM이면 그대로)
+    const w = snap.winner;
+    const wId = w ? w.id : null;
+    if (w !== null && wId !== lastWinnerId) {
+      if (followId === null && !RM) {
+        winnerActive = true;
+        winnerDwell = 0;
+        winnerPoint.copy(w.mesh.position);
+      }
+    }
+    lastWinnerId = wId;
+    // 시점 고정이 켜지면 winner 컷은 양보
+    if (followId !== null) winnerActive = false;
+    if (winnerActive) {
+      winnerDwell += dt;
+      if (winnerDwell >= 3) {
+        winnerActive = false;
+        blendOnce = true;
+        shotTime = MIN_HOLD;
+      } else {
+        // 타깃은 우승 구슬 + 2.5 위(구슬과 위로 솟는 색종이가 화면 중앙에 들어오게),
+        // 카메라는 그 점에서 측면·위쪽 16 거리(FINISH_DIR 고각 약 26도 → 아래로 내려다봄)
+        desiredTgt.copy(winnerPoint);
+        desiredTgt.y += 2.5;
+        desiredPos.copy(desiredTgt).addScaledVector(FINISH_DIR, 16);
+        smoothToDesired(dt);
+        clampCamera(snap);
+        camera.lookAt(curTarget);
+        return;
+      }
+    }
 
     // 시점 고정 중이면 자동 샷 전환을 멈추고 전용 추적샷. 수동 모드보다 우선순위 낮음(위에서 처리).
     const followed = followId !== null ? (snap.ranked.find((m) => m.id === followId) ?? null) : null;
@@ -320,7 +359,7 @@ export const createCameraDirector: CreateCameraDirector = (camera, dom, course) 
   // 현재 샷 이름 외부 노출(계약 외 부가 정보 — UI 표시용으로 읽을 수 있다)
   Object.defineProperty(director, 'shotName', {
     enumerable: true,
-    get: () => (manual ? 'manual' : shot),
+    get: () => (manual ? 'manual' : winnerActive ? 'winner' : followId !== null ? 'follow' : shot),
   });
   return director;
 };

@@ -8,6 +8,7 @@ import { createCameraDirector } from './camera';
 import { createUI } from './ui';
 import { startPartyHost } from './party/host';
 import { createMusic } from './audio';
+import { createConfetti } from './confetti';
 import type { EntryMode, PartyHost } from './types';
 import { MARBLE_RADIUS, type Marble, type Phase, type RaceSnapshot, type WinMode } from './types';
 
@@ -70,6 +71,7 @@ const qs = new URLSearchParams(location.search);
 const only = qs.get('sections')?.split(',').filter(Boolean);
 const course = allSections().length ? assembleCourse(RAPIER, world, scene, only) : buildLegacy(RAPIER, world, scene);
 const checkpoints = [...(course.checkpoints ?? [0, 0.25, 0.5, 0.75])].sort((a, b) => a - b);
+const lastCheckpoint = checkpoints[checkpoints.length - 1];
 const director = createCameraDirector(camera, renderer.domElement, course);
 const ui = createUI(document.getElementById('ui')!);
 
@@ -210,7 +212,8 @@ function physicsStep() {
       }
     }
     m.progress = Math.max(m.progress, course.progressOf(tmp));
-    if (course.isFinished(tmp)) {
+    // 완주는 마지막 구간(결승 구간)에 들어온 적이 있는 구슬만 인정 — 탑 옆으로 곧장 떨어진 구슬의 오판 방지
+    if (m.progress >= lastCheckpoint && course.isFinished(tmp)) {
       m.place = ++finishCount;
       m.finishedAt = raceT;
       m.progress = 1;
@@ -226,19 +229,29 @@ function physicsStep() {
 
   if (phase === 'racing') {
     const left = marbles.filter((m) => m.place === null);
-    if (mode === 'first' && !winnerM && finishCount >= 1) winnerM = marbles.find((m) => m.place === 1) ?? null;
+    if (mode === 'first' && !winnerM && finishCount >= 1) {
+      winnerM = marbles.find((m) => m.place === 1) ?? null;
+      if (winnerM) celebrate(winnerM);
+    }
     if (mode === 'last' && left.length === 1) {
       // 마지막 한 명 = 꼴등 확정. 순위표를 완성하기 위해 꼴찌 순위를 부여한다
       const m = left[0];
       m.place = ++finishCount;
       m.finishedAt = null; // 실제 완주는 아님
       winnerM = m;
+      celebrate(m);
     }
     if (marbles.every((m) => m.place !== null)) {
       phase = 'done';
       doneTimer = 2.5; // 결과 띄우기 전 잠깐 여운
     }
   }
+}
+
+/** 당첨 확정 순간 1회: 당첨 구슬 위치에서 색종이(코어). 화면 알림·카메라 컷은 UI/카메라가 snap.winner로 처리 */
+function celebrate(m: Marble) {
+  const p = m.body.translation();
+  confetti.burst(new THREE.Vector3(p.x, p.y, p.z), m.color);
 }
 
 function startRace(names: string[], m: WinMode) {
@@ -262,6 +275,7 @@ function toLobby() {
 ui.onToggleManual(() => director.setManual(!director.isManual()));
 ui.onFollow?.((id) => director.follow?.(id));
 const music = createMusic();
+const confetti = createConfetti(scene);
 ui.onAudio?.((st) => {
   music.setMuted(st.muted);
   music.setVolume(st.volume);
@@ -396,6 +410,7 @@ renderer.setAnimationLoop((now) => {
     }
   }
   director.update(dt, snap);
+  confetti.update(dt);
   music.update(dt, phase, mode, snap.ranked.find((m) => m.place === null)?.progress ?? 1, snap.ranked.filter((m) => m.place === null).length, winnerM !== null);
   for (const m of marbles) {
     const lb = labels.get(m.id);

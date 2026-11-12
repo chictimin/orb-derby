@@ -72,12 +72,26 @@ const CSS = `
 .odb-row.odb-following{border-color:#c23375;background:#fff}
 .odb-rowbtn{display:flex;align-items:center;gap:7px;width:100%;border:none;background:transparent;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
 .odb-followchip{display:block;width:100%;margin-bottom:8px;padding:7px 10px;border:2px solid #c23375;border-radius:999px;background:#fff0f6;color:#a8245e;font-size:13px;font-weight:900;cursor:pointer}
-.odb-all{margin-top:10px;border-top:2px dashed #ffe0ec;padding-top:8px}
-.odb-allsummary{font-size:13px;font-weight:900;color:#5a4f66;cursor:pointer}
-.odb-allsearch{width:100%;margin-top:8px;border:2px solid #e5ddff;border-radius:12px;padding:7px 10px;font-size:13px;font-weight:700;color:#4a3f55;background:#fff;outline:none}
-.odb-allsearch::placeholder{color:#6b5c78;opacity:1}
-.odb-alllist{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;max-height:24vh;overflow:auto}
 .odb-panel summary:focus-visible{outline:3px solid #6a4fd8;outline-offset:2px}
+.odb-panel input:focus-visible{outline:3px solid #6a4fd8;outline-offset:1px}
+.odb-side{top:12px;right:12px;width:300px;z-index:40}
+.odb-sidetoggle{display:none}
+.odb-sidesearch{width:100%;background:#fff;border:none;border-radius:10px;padding:7px 10px;font-size:13px;font-weight:700;color:#111;outline:none;box-shadow:0 2px 10px rgba(0,0,0,.25);margin-bottom:4px}
+.odb-sidesearch::placeholder{color:#595959;opacity:1}
+.odb-sidelist{list-style:none;margin:0;padding:0;display:grid;gap:0;max-height:calc(100vh - 80px)}
+.odb-sidelist.cols2{grid-auto-flow:column;column-gap:14px}
+.odb-siderowbtn{display:flex;align-items:center;gap:6px;width:100%;min-height:24px;border:none;background:transparent;padding:3px 4px 3px 7px;font-size:13px;font-weight:800;line-height:1.35;color:#111;cursor:pointer;text-align:left;-webkit-text-stroke:3px #fff;paint-order:stroke fill}
+.odb-siderowbtn .odb-sidedot{flex:0 0 auto;width:10px;height:10px;border-radius:50%}
+.odb-siderowbtn .odb-sidename{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.odb-siderow.odb-mark > .odb-siderowbtn{box-shadow:inset 3px 0 0 #a8245e}
+.odb-siderow.odb-mark .odb-sidename{text-decoration:underline;text-decoration-thickness:2px}
+@media (max-width:760px){
+.odb-side{width:min(260px,calc(100vw - 24px))}
+.odb-sidetoggle{display:block;border:none;background:rgba(255,255,255,.92);color:#111;font-size:13px;font-weight:800;border-radius:999px;padding:8px 14px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.25);white-space:nowrap}
+.odb-sidesearch,.odb-sidelist{display:none}
+.odb-side.open .odb-sidesearch,.odb-side.open .odb-sidelist{display:block}
+.odb-side.open .odb-sidelist{margin-top:4px}
+}
 .odb-cambtn{margin-top:10px;width:100%;padding:9px 0;border:none;border-radius:999px;background:#6a4fd8;color:#fff;font-size:14px;font-weight:900;cursor:pointer;box-shadow:0 4px 0 #5740b8}
 .odb-cambtn:active{transform:translateY(2px);box-shadow:0 2px 0 #5740b8}
 .odb-speeds{display:flex;gap:6px;margin-top:10px}
@@ -105,10 +119,16 @@ const CSS = `
 .odb-qrcopy{margin-top:8px;padding:7px 14px;border:none;border-radius:999px;background:#6a4fd8;color:#fff;font-size:12px;font-weight:900;cursor:pointer}
 .odb-qrwarn{font-size:11.5px;font-weight:800;color:#d32f2f;margin-top:8px}
 .odb-toast{top:14px;left:50%;transform:translateX(-50%);background:rgba(74,63,85,.95);color:#fff;font-size:14px;font-weight:900;padding:10px 20px;border-radius:999px;white-space:nowrap;max-width:calc(100vw - 32px);overflow:hidden;text-overflow:ellipsis;z-index:50}
+.odb-winalert{top:34%;left:50%;transform:translate(-50%,-50%);background:#fff7fb;border:4px solid #ff9ec4;border-radius:24px;padding:20px 34px;text-align:center;box-shadow:0 16px 48px rgba(224,80,138,.4);animation:odb-winpop .3s ease-out;z-index:60;cursor:pointer;max-width:calc(100vw - 48px)}
+.odb-winalertxt{font-size:30px;font-weight:900;color:#2a2230;margin:8px 0 0;word-break:break-word}
+.odb-winalswatch{width:40px;height:40px;border-radius:50%;margin:0 auto;box-shadow:inset -4px -4px 0 rgba(0,0,0,.18)}
+@keyframes odb-winpop{from{opacity:0;transform:translate(-50%,-50%) scale(.7)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@media (prefers-reduced-motion:reduce){.odb-winalert{animation:none}}
 @media (min-width:920px){.odb-qr{position:absolute;left:calc(100% + 16px);top:0}}
 @media (max-width:640px){
 .odb-hud{width:200px;padding:9px 10px;top:8px;left:8px}
 .odb-row{font-size:12px;padding:3px 7px}
+.odb-winalertxt{font-size:24px}
 .odb-speed{font-size:10px}
 .odb-time{font-size:14px}
 .odb-speed{font-size:11px}
@@ -313,6 +333,28 @@ export const createUI: CreateUI = (root) => {
   const toastEl = el('div', 'odb-panel odb-toast', root);
   toastEl.style.display = 'none';
 
+  // 우승 순간 알림 카드(3초 뒤 자동 사라짐, 클릭·Esc로 즉시 닫기).
+  // 스크린리더 안내는 기존 당첨 live 안내 1회로 충분하므로 카드는 aria-hidden이다.
+  const winAlert = el('div', 'odb-panel odb-winalert', root);
+  winAlert.style.display = 'none';
+  winAlert.setAttribute('aria-hidden', 'true');
+  winAlert.title = '클릭하면 닫힘';
+  const winAlertSwatch = el('div', 'odb-winalswatch', winAlert);
+  const winAlertText = el('p', 'odb-winalertxt', winAlert);
+  let winAlertTimer = 0;
+  function hideWinAlert(): void {
+    window.clearTimeout(winAlertTimer);
+    winAlert.style.display = 'none';
+  }
+  function showWinAlert(m: Marble, mode: WinMode): void {
+    winAlertSwatch.style.background = m.color;
+    winAlertText.textContent = mode === 'first' ? `${m.name} 우승!` : `${m.name} 꼴등 당첨!`;
+    winAlert.style.display = '';
+    window.clearTimeout(winAlertTimer);
+    winAlertTimer = window.setTimeout(hideWinAlert, 3000);
+  }
+  winAlert.onclick = hideWinAlert;
+
   let toastTimer = 0;
   function showToast(text: string): void {
     toastEl.textContent = text;
@@ -340,6 +382,7 @@ export const createUI: CreateUI = (root) => {
   function resetAnnounce(): void {
     announcedWinnerId = null;
     announcedPlaces.clear();
+    hideWinAlert();
   }
 
   // ── 로비 ──
@@ -641,6 +684,7 @@ export const createUI: CreateUI = (root) => {
     countEl.style.display = 'none';
     hudEl.style.display = 'none';
     resultEl.style.display = 'none';
+    sideEl.style.display = 'none';
   }
 
   // ── HUD (DOM은 한 번만 만들고 updateHud에서 내용만 갱신) ──
@@ -693,6 +737,11 @@ export const createUI: CreateUI = (root) => {
   // 키보드 1~4 배속 전환, P/Space 일시정지·재개. 입력란 타이핑 중이거나 HUD가 닫혀 있으면 무시.
   // 포커스가 버튼 위일 때 Space는 네이티브 버튼 동작에 맡긴다.
   window.addEventListener('keydown', (e) => {
+    // 우승 알림이 떠 있으면 Esc로 즉시 닫기
+    if (e.key === 'Escape' && winAlert.style.display !== 'none') {
+      hideWinAlert();
+      return;
+    }
     const ae = document.activeElement;
     const typing =
       !!ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT' || (ae as HTMLElement).isContentEditable);
@@ -730,26 +779,34 @@ export const createUI: CreateUI = (root) => {
   followChip.onclick = () => followCb(null);
   hudEl.insertBefore(followChip, board);
 
-  // 전체 참가자 접이식 목록(검색 포함, 40명 대응)
-  const allDetails = document.createElement('details');
-  allDetails.className = 'odb-all';
-  const allSummary = document.createElement('summary');
-  allSummary.className = 'odb-allsummary';
-  allSummary.textContent = '전체 참가자';
-  const allSearch = document.createElement('input');
-  allSearch.type = 'search';
-  allSearch.className = 'odb-allsearch';
-  allSearch.placeholder = '이름 검색';
-  allSearch.setAttribute('aria-label', '참가자 검색');
-  const allList = document.createElement('ol');
-  allList.className = 'odb-alllist';
-  allDetails.appendChild(allSummary);
-  allDetails.appendChild(allSearch);
-  allDetails.appendChild(allList);
-  hudEl.appendChild(allDetails);
+  // 우측 참가자 패널(레이스 중에만 표시). 배경·테두리·카드 없이 텍스트만.
+  const sideEl = el('div', 'odb-panel odb-side', root);
+  sideEl.style.display = 'none';
+  const sideToggle = document.createElement('button');
+  sideToggle.className = 'odb-sidetoggle';
+  sideToggle.setAttribute('aria-expanded', 'false');
+  sideToggle.setAttribute('aria-controls', 'odb-sidelist');
+  sideEl.appendChild(sideToggle);
+  const sideSearch = document.createElement('input');
+  sideSearch.type = 'search';
+  sideSearch.className = 'odb-sidesearch';
+  sideSearch.placeholder = '이름 검색';
+  sideSearch.setAttribute('aria-label', '참가자 검색');
+  sideEl.appendChild(sideSearch);
+  const sideList = document.createElement('ol');
+  sideList.className = 'odb-sidelist';
+  sideList.id = 'odb-sidelist';
+  sideEl.appendChild(sideList);
+  sideToggle.onclick = () => {
+    const open = sideEl.classList.toggle('open');
+    sideToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
   let lastSnap: RaceSnapshot | null = null;
-  allSearch.addEventListener('input', () => {
-    if (lastSnap) renderAllList(lastSnap, shownFollowing);
+  sideSearch.addEventListener('input', () => {
+    if (lastSnap) renderSideList(lastSnap, shownFollowing);
+  });
+  window.addEventListener('resize', () => {
+    if (lastSnap && sideEl.style.display !== 'none') renderSideList(lastSnap, shownFollowing);
   });
 
   let lastHudAt = 0;
@@ -777,39 +834,65 @@ export const createUI: CreateUI = (root) => {
     }
   }
 
-  function renderAllList(snap: RaceSnapshot, following: number | null): void {
+  // 행 시각 높이 24px(13px/1.35 + 패딩). 2열 전환 판단용 추정치.
+  const SIDE_ROW_H = 24;
+  const SIDE_SEARCH_H = 48;
+  function renderSideList(snap: RaceSnapshot, following: number | null): void {
     // 목록 안에서 탭 이동 중이면 다시 그리지 않는다(포커스 유지)
-    if (allList.contains(document.activeElement)) return;
-    const q = allSearch.value.trim().toLowerCase();
-    allList.replaceChildren();
+    if (sideList.contains(document.activeElement)) return;
+    const q = sideSearch.value.trim().toLowerCase();
+    sideList.replaceChildren();
+    let n = 0;
     snap.ranked.forEach((m, i) => {
       if (q && !m.name.toLowerCase().includes(q)) return;
+      n++;
+      const isWinner = snap.winner !== null && m.id === snap.winner.id;
+      const st = isWinner
+        ? '당첨'
+        : m.place !== null
+          ? '완주'
+          : snap.focus !== null && m.id === snap.focus.id
+            ? snap.mode === 'first'
+              ? '우승 유력'
+              : '꼴등 유력'
+            : '';
       const li = document.createElement('li');
-      li.className = 'odb-row';
-      li.classList.toggle('odb-following', m.id === following);
+      li.className = 'odb-siderow';
+      if (m.id === following || isWinner) li.classList.add('odb-mark');
       const btn = document.createElement('button');
-      btn.className = 'odb-rowbtn';
+      btn.className = 'odb-siderowbtn';
       btn.setAttribute('aria-pressed', m.id === following ? 'true' : 'false');
-      btn.setAttribute('aria-label', `${m.place ?? i + 1}위 ${m.name}${m.place !== null ? ' 완주' : ''} 시점 선택`);
+      btn.setAttribute('aria-label', `${m.place ?? i + 1}위 ${m.name}${st ? ` ${st}` : ''} 시점 선택`);
       const rank = document.createElement('span');
-      rank.className = 'odb-rank';
       rank.textContent = `${m.place ?? i + 1}위`;
       const dot = document.createElement('span');
-      dot.className = 'odb-dot';
+      dot.className = 'odb-sidedot';
       dot.style.background = m.color;
       dot.setAttribute('aria-hidden', 'true');
       const nm = document.createElement('span');
-      nm.className = 'odb-name';
+      nm.className = 'odb-sidename';
       nm.textContent = m.name;
       btn.appendChild(rank);
       btn.appendChild(dot);
       btn.appendChild(nm);
-      renderRowTags(btn, m, snap);
+      if (st) {
+        const stEl = document.createElement('span');
+        stEl.textContent = st;
+        btn.appendChild(stEl);
+      }
       btn.onclick = () => followCb(m.id === following ? null : m.id);
       li.appendChild(btn);
-      allList.appendChild(li);
+      sideList.appendChild(li);
     });
-    allSummary.textContent = `전체 참가자 ${snap.ranked.length}명`;
+    sideToggle.textContent = `참가자 ${snap.ranked.length}명`;
+    // 화면 높이가 모자라면 스크롤 대신 2열로 흐르게
+    if (n > 1 && n * SIDE_ROW_H + SIDE_SEARCH_H > window.innerHeight - 24) {
+      sideList.classList.add('cols2');
+      sideList.style.gridTemplateRows = `repeat(${Math.ceil(n / 2)}, ${SIDE_ROW_H}px)`;
+    } else {
+      sideList.classList.remove('cols2');
+      sideList.style.gridTemplateRows = '';
+    }
   }
 
   function renderHud(snap: RaceSnapshot, manual: boolean, speed: number, following: number | null): void {
@@ -830,7 +913,9 @@ export const createUI: CreateUI = (root) => {
         snap.mode === 'first' ? `${snap.winner.name} 당첨!` : `${snap.winner.name} 꼴등 당첨!`;
       if (announcedWinnerId !== snap.winner.id) {
         announcedWinnerId = snap.winner.id;
+        // aria-live 안내는 여기서 1회만(알림 카드와 중복 안내 금지)
         announce(snap.mode === 'first' ? `${snap.winner.name} 당첨` : `${snap.winner.name} 꼴등 당첨`);
+        showWinAlert(snap.winner, snap.mode);
       }
     } else {
       winBanner.style.display = 'none';
@@ -881,7 +966,7 @@ export const createUI: CreateUI = (root) => {
       // 기존 태그 제거 후 상태에 맞게 부착
       renderRowTags(btn, m, snap);
     }
-    renderAllList(snap, following);
+    renderSideList(snap, following);
   }
 
   // ── 결과 ──
@@ -944,6 +1029,7 @@ export const createUI: CreateUI = (root) => {
       if (lobbyEl.style.display !== 'none' || resultEl.style.display !== 'none') {
         hideAll();
         hudEl.style.display = '';
+        sideEl.style.display = '';
         lastHudAt = 0;
       }
       if (countEl.style.display !== 'none' && snap.t > 0.5) countEl.style.display = 'none';
@@ -951,11 +1037,13 @@ export const createUI: CreateUI = (root) => {
       if (now - lastHudAt < HUD_THROTTLE_MS) return;
       lastHudAt = now;
       hudEl.style.display = '';
+      sideEl.style.display = '';
       lastSnap = snap;
       renderHud(snap, manual, speed, following);
     },
     showResult(winner: Marble, ranked: Marble[], mode: WinMode, onRestart: () => void) {
       restartCb = onRestart;
+      hideWinAlert();
       hideAll();
       resultEl.style.display = '';
       announce(`결과 발표. ${winner.name} ${mode === 'first' ? '당첨' : '꼴등 당첨'}`);

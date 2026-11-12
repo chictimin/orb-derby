@@ -89,7 +89,7 @@ async function run(seed: number) {
       if (sp > MAX_SPEED) m.body.setLinvel({ x: (v.x * MAX_SPEED) / sp, y: (v.y * MAX_SPEED) / sp, z: (v.z * MAX_SPEED) / sp }, true);
       m.progress = Math.max(m.progress, course.progressOf(p));
       if (t < 5.01 && t > 4.99) m.early = m.progress;
-      if (course.isFinished(p)) {
+      if (m.progress >= cps[cps.length - 1] && course.isFinished(p)) {
         m.fin = t;
         continue;
       }

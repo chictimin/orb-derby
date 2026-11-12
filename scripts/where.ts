@@ -19,4 +19,4 @@ for (const d of defs) {
   console.log(d.name.padEnd(8), 'entry', f(entry), 'exit', f(b.exit));
   entry = b.exit.clone().add(new THREE.Vector3(0, -DROP_GAP, 0));
 }
-console.log('finish pad', `(${entry.x.toFixed(1)}, ${entry.y.toFixed(1)}, ${entry.z.toFixed(1)}) r=10`);
+console.log('finish pad', `(${entry.x.toFixed(1)}, ${entry.y.toFixed(1)}, ${entry.z.toFixed(1)}) r=13`);
