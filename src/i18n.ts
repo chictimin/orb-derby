@@ -26,8 +26,30 @@ function detect(): Lang {
   return (navigator.languages?.[0] ?? navigator.language ?? 'en').toLowerCase().startsWith('ko') ? 'ko' : 'en';
 }
 
+// SEO: hreflang 링크가 있는 페이지(index.html)만. canonical은 실제 URL 기준(?lang=ko/en은 각자, 기본 주소는 x-default),
+// description은 표시 언어 기준. 크롤러는 영어 브라우저로 렌더링하므로 기본 주소가 영어 설명을 갖게 된다.
+const DESC: Record<Lang, string> = {
+  ko: '이름을 넣으면 구슬이 3D 장애물 탑을 굴러 내려가 순위를 정하는 무료 구슬 경주 추첨기. 룰렛·돌림판 추첨 대신 랜덤 뽑기, 제비뽑기, 순서 정하기, 벌칙 당첨자 뽑기에 쓰세요. 2~40명, QR로 휴대폰 참가, 설치·가입 없음.',
+  en: 'A free 3D marble race picker: enter 2-40 names and the marbles race down an obstacle tower to pick a winner or the full order. A fun alternative to a roulette wheel or random name picker. Join by QR, no sign-up.',
+};
+
+function applyHead(l: Lang) {
+  if (!document.querySelector('link[rel="alternate"][hreflang]')) return;
+  const qs = new URLSearchParams(location.search).get('lang');
+  const href = `${location.origin}${location.pathname}${qs === 'ko' || qs === 'en' ? `?lang=${qs}` : ''}`;
+  let canon = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+  if (!canon) {
+    canon = document.createElement('link');
+    canon.rel = 'canonical';
+    document.head.append(canon);
+  }
+  canon.href = href;
+  document.querySelector('meta[name="description"]')?.setAttribute('content', DESC[l]);
+}
+
 let lang: Lang = detect();
 document.documentElement.lang = lang;
+applyHead(lang);
 const listeners = new Set<(l: Lang) => void>();
 
 export function getLang(): Lang {
@@ -39,6 +61,7 @@ export function setLang(l: Lang) {
   if (l === lang) return;
   lang = l;
   document.documentElement.lang = l;
+  applyHead(l);
   try {
     localStorage.setItem(LS, l);
   } catch {

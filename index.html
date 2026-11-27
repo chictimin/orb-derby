@@ -4,9 +4,62 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Orb Derby — 구슬 경주 추첨기</title>
-    <style>html,body{margin:0;height:100%;overflow:hidden;background:#bfe3ff;font-family:system-ui,sans-serif}#app{position:fixed;inset:0}#ui{position:fixed;inset:0;pointer-events:none}#ui *{pointer-events:auto}</style>
+    <meta name="description" content="이름을 넣으면 구슬이 3D 장애물 탑을 굴러 내려가 순위를 정하는 무료 구슬 경주 추첨기. 룰렛·돌림판 추첨 대신 랜덤 뽑기, 제비뽑기, 순서 정하기, 벌칙 당첨자 뽑기에 쓰세요. 2~40명, QR로 휴대폰 참가, 설치·가입 없음." />
+    <link rel="alternate" hreflang="ko" href="https://chictimin.github.io/orb-derby/?lang=ko" />
+    <link rel="alternate" hreflang="en" href="https://chictimin.github.io/orb-derby/?lang=en" />
+    <link rel="alternate" hreflang="x-default" href="https://chictimin.github.io/orb-derby/" />
+    <meta name="theme-color" content="#bfe3ff" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Orb Derby" />
+    <meta property="og:title" content="Orb Derby — 구슬 경주 추첨기" />
+    <meta property="og:description" content="이름을 넣으면 구슬이 3D 장애물 탑을 굴러 내려가 순위가 정해집니다. 랜덤 뽑기·순서 정하기용 무료 추첨기." />
+    <meta property="og:url" content="https://chictimin.github.io/orb-derby/" />
+    <meta property="og:image" content="https://chictimin.github.io/orb-derby/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:locale:alternate" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Orb Derby — 구슬 경주 추첨기" />
+    <meta name="twitter:description" content="이름을 넣으면 구슬이 3D 장애물 탑을 굴러 내려가 순위가 정해지는 무료 추첨기." />
+    <meta name="twitter:image" content="https://chictimin.github.io/orb-derby/og.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Orb Derby",
+        "alternateName": ["구슬 경주 추첨기", "구슬 룰렛 추첨", "Marble Race Picker"],
+        "url": "https://chictimin.github.io/orb-derby/",
+        "description": "이름을 넣으면 구슬이 3D 장애물 탑을 굴러 내려가 순위를 정하는 구슬 경주 추첨기. A free 3D marble race picker: enter names and let the marbles decide the winner or the order.",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "Any (web browser)",
+        "inLanguage": ["ko", "en"],
+        "image": "https://chictimin.github.io/orb-derby/og.png",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "KRW" }
+      }
+    </script>
+    <style>html,body{margin:0;height:100%;overflow:hidden;background:#bfe3ff;font-family:system-ui,sans-serif}#app{position:fixed;inset:0}#ui{position:fixed;inset:0;pointer-events:none}#ui *{pointer-events:auto}#about{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}</style>
   </head>
   <body>
+    <main id="about">
+      <section lang="ko">
+        <h1>Orb Derby — 구슬 경주 추첨기</h1>
+        <p>이름을 넣으면 사람마다 구슬이 하나씩 생기고, 3D 장애물 탑을 굴러 내려가 순위가 정해지는 무료 추첨기입니다. 룰렛 추첨, 돌림판, 사다리 타기 대신 쓰는 랜덤 뽑기로, 제비뽑기, 순서 정하기, 벌칙·당번 정하기, 경품 추첨에 쓸 수 있습니다.</p>
+        <h2>사용법</h2>
+        <ol>
+          <li>참가자 이름을 줄바꿈이나 쉼표로 구분해 2~40명 입력하거나, 화면의 QR을 휴대폰으로 찍어 참가합니다.</li>
+          <li>선착순 우승(가장 먼저 도착한 구슬)과 꼴등 당첨(마지막까지 남은 구슬) 중 하나를 고릅니다.</li>
+          <li>경주를 시작하면 구슬이 탑을 굴러 내려가고, 끝나면 전체 순위가 나옵니다.</li>
+        </ol>
+      </section>
+      <section lang="en">
+        <h2>Orb Derby — Marble Race Picker</h2>
+        <p>A free 3D marble race picker. Enter 2 to 40 names, each gets a marble, and the marbles race down an obstacle tower to decide the winner, the loser, or the full order. A fun alternative to a spin-the-wheel roulette or random name picker. Players can also join from their phones by scanning a QR code. No install or sign-up.</p>
+      </section>
+    </main>
     <div id="app"></div>
     <div id="ui"></div>
     <script type="module" src="/src/main.ts"></script>
